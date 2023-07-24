@@ -35,11 +35,11 @@ TODO: how to handle wanting Dockerfile and manifests to be in different director
 
 TODO: can we leverage Draft to handle this?
 
+TODO: this should also handle updating existing manifests to new forms.
+
 #### spin aks build
 
-TODO: is this needed?
-
-Builds docker container locally
+Functions like spin build but also ensures that current Spin application will work for AKS (not all Spin versions are compatible). Builds the .wasm files needed for the docker image.
 
 https://docs.docker.com/engine/api/sdk/
 
