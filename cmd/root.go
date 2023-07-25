@@ -17,17 +17,13 @@ To walk through all deploy steps, run the 'spin aks up' command.
 
 	$ spin aks up
 
-Check the plugin version with the 'spin aks --version' command.
-
-	$ spin aks --version
-
 For more information, please visit the GitHub page at https://github.com/OliverMKing/spin-aks-plugin.
 
 Report any feature requests or issues at https://github.com/OliverMKing/spin-aks-plugin/issues.`,
 }
 
 func Execute(c Config) {
-	rootCmd.Version = c.Version // if version isn't passed the only consequence should be the version command not working
+	rootCmd.Version = c.Version // if version is empty the only consequence should be the version command not working
 
 	// need to prefix command use with "spin" because it's a spin plugin
 	rootCmd.SetUsageTemplate(
