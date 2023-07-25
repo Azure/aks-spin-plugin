@@ -76,3 +76,5 @@ Goes through all steps to ensure your application is running
 ## TODO: how to handle azure kv and acr permissions? Do we prompt to attach?
 
 ## TODO: key value store with cosmos db https://developer.fermyon.com/spin/dynamic-configuration#key-value-store-runtime-configuration
+
+## TODO: what do we have to do for redis applications?
