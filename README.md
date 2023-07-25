@@ -74,3 +74,5 @@ Goes through all steps to ensure your application is running
 ## TODO: handle spin variables https://github.com/fermyon/spin/blob/a3d97b1aefb912ff02313875ab4f1b3c0364dac1/docs/content/sips/002-app-config.md and secrets. use annotations to seperate acr spin variables from others? Must support azure keyvault because k8s secrets are not secure.
 
 ## TODO: how to handle azure kv and acr permissions? Do we prompt to attach?
+
+## TODO: key value store with cosmos db https://developer.fermyon.com/spin/dynamic-configuration#key-value-store-runtime-configuration
