@@ -2,6 +2,7 @@ package spin
 
 // https://developer.fermyon.com/spin/manifest-reference
 type manifest struct {
+	spinVersion         string `mapstructure:"spin_version"`
 	spinManifestVersion string `mapstructure:"spin_manifest_version"`
 	name                string
 	version             string

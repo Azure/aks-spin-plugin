@@ -7,14 +7,19 @@ import (
 )
 
 func Parse() (*manifest, error) {
-	parser := viper.New()
-	parser.SetConfigType("toml")
-	parser.SetConfigName("spin")
+	v := viper.New()
+	v.SetConfigType("toml")
+	v.SetConfigName("spin")
+	v.AddConfigPath("./")
 
-	var m manifest
-	if err := viper.Unmarshal(&m); err != nil {
+	if err := v.ReadInConfig(); err != nil {
+		return nil, fmt.Errorf("loading config: %w", err)
+	}
+
+	m := &manifest{}
+	if err := v.Unmarshal(m); err != nil {
 		return nil, fmt.Errorf("unmarshalling spin manifest: %w", err)
 	}
 
-	return &m, nil
+	return m, nil
 }
