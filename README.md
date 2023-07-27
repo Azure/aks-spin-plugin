@@ -81,11 +81,23 @@ If we have already created these files, the cli handles updating them to the "la
 
 Included in the manifests is a KWASM deployment along with deployments + services for the spin application.
 
+Checks the spin.toml variables https://developer.fermyon.com/spin/manifest-reference#the-variables-table. If it's a secret, the user is prompted to select a keyvault secret for this (or is given the option to create a kv secret). Secrets will use the aks kv csi driver to load secrets into the spin application pod. These need to be mounted by the pod according to the csi driver spec (even though we are only using them as env variables in the pod). This will be represented in generated manifests. Secret locations will be stored in the spin aks toml config.
+
+If a spin variable isn't a secret it's configured directly through plaintext env variables on the deployment.
+
 The Dockerfile and k8s file locations are stored in the aks spin toml.
+
+#### spin aks variable put
+
+If variable isn't a secret updates the plaintext env variable representing the secret in the k8s files.
+
+Updates a variable in the keyvault if the variable is a secret. TODO: need to figure out the secret autorotation strategy in a future iteration.
 
 #### spin aks deploy
 
-Applies manifests to the k8s cluster.
+Applies manifests to the k8s cluster. Also ensures cluster has permission to access acr, if not it prompts to attach.
+
+If secrets are used by the application then we prompt them to install the keyvault csi driver addon. Also prompt to attach the keyvault to the cluster addon identity so we can pull the secrets.
 
 Doesn't support private clusters for now. We can in the future pretty easily thanks to az aks command invoke.
 
@@ -99,10 +111,8 @@ Goes through all steps to ensure your application is running. This is one comman
 
 All steps are idempotent and these commands can be used to update what's running in the cluster to a new application version.
 
-## TODO: handle spin variables https://github.com/fermyon/spin/blob/a3d97b1aefb912ff02313875ab4f1b3c0364dac1/docs/content/sips/002-app-config.md and secrets. use annotations to seperate acr spin variables from others? Must support azure keyvault because k8s secrets are not secure.
+## TODO: how to handle azure kv? Do we prompt to attach?
 
-## TODO: how to handle azure kv and acr permissions? Do we prompt to attach?
-
-## TODO: key value store with cosmos db https://developer.fermyon.com/spin/dynamic-configuration#key-value-store-runtime-configuration
+## TODO: key value store with cosmos db https://developer.fermyon.com/spin/dynamic-configuration#key-value-store-runtime-configuration. can be done with this https://github.com/deislabs/containerd-wasm-shims/pull/61. Can we use the moustache inspired template so we can use secrets? https://developer.fermyon.com/spin/dynamic-configuration#component-custom-config
 
 ## TODO: what do we have to do for redis applications?
