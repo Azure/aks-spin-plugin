@@ -13,11 +13,10 @@ func Parse() (*manifest, error) {
 	v.AddConfigPath("./")
 
 	if err := v.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("loading config: %w", err)
+		return nil, fmt.Errorf("loading spin manifest config: %w", err)
 	}
 
 	m := &manifest{}
-
 	if err := v.Unmarshal(m); err != nil {
 		return nil, fmt.Errorf("unmarshalling spin manifest: %w", err)
 	}
