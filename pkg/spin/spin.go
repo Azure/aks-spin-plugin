@@ -17,6 +17,7 @@ func Parse() (*manifest, error) {
 	}
 
 	m := &manifest{}
+
 	if err := v.Unmarshal(m); err != nil {
 		return nil, fmt.Errorf("unmarshalling spin manifest: %w", err)
 	}
