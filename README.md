@@ -13,35 +13,46 @@ We use the [azidentity DefaultAzureCredential](https://pkg.go.dev/github.com/Azu
 Stores a "state" in `$(DATA_DIR)/spin/plugins/aks/state`. This follows the Spin model described [here](https://developer.fermyon.com/spin/cache).
 
 State that's stored includes the following
+
 - Subscription, resource group, cluster name of most recently selected cluster
 - Subscription, resource group, cluster name of most recently selected container registry
 - Registry, image name, tag of most recently deployed image per application
+- Last used spin aks config path
 
-State will primarily be used to autofill prompts as intelligently as possible. This will allow most users to simply press "enter" through the prompts but also allows more advanced cases to customzie usage.
+State will primarily be used to autofill prompts as intelligently as possible. This will allow most users to simply press "enter" through the prompts but also allows more advanced cases to customize usage.
+
+### Config
+
+A config file is where this plugin will read values from.
+
+This file by default will be called aks-spin.toml but can be another toml file that's referenced by the global `-c` of `--config` flag. This allows for users to have different "environments".
+
+### Azure feature selection
+
+Users will be prompted for various Azure resources when using the cli. The CLI will provide an additional option for creating resources as well.
+
+For example, if a user is asked for an AKS cluster we give them the option to select one but also give them the option to create a new default one.
+
+### Versions
+
+This plugin will be compatible with all spin versions 1.x.x
 
 ### Commands
 
-#### spin aks scaffold
+#### spin aks init
 
-TODO: is this name good?
+Walks users through creating a new spin aks config.
 
-Creates Dockerfile and manifests. Should give option of Helm, Kustomize, Kube.
+Asks for
 
-Optional `-o`` or `--output` flag to specify output directory. 
-
-Optional `-y` flag to accept all defaults.
-
-TODO: how to handle wanting Dockerfile and manifests to be in different directories?
-
-TODO: can we leverage Draft to handle this?
-
-TODO: this should also handle updating existing manifests to new forms.
+- config filename + location (will be autofilled as the default of `./spin-aks.toml` so most users just have to press enter)
+- cluster name (subscription, rg, name)
+- acr name (subscription, rg, name)
+- spin.toml file location (tries to detect automatically)
 
 #### spin aks build
 
-Functions like spin build but also ensures that current Spin application will work for AKS (not all Spin versions are compatible). Builds the .wasm files needed for the docker image.
-
-https://docs.docker.com/engine/api/sdk/
+Functions like spin build but also ensures that current Spin application will work for AKS (not all Spin versions are compatible, Spin version should be 1.x.x). Builds the .wasm files needed for the docker image.
 
 #### spin aks push
 
@@ -49,27 +60,44 @@ User selects they are pushing to acr or another registry.
 
 Pushes docker container to registry.
 
-https://docs.docker.com/engine/api/sdk/
+Stores the image tag in the aks spin toml config.
 
-TODO: how to configure? support more than acr?
+#### spin aks scaffold
 
-#### spin aks apply
+Creates Dockerfile and manifests. Should give option of Helm, Kustomize, Kube. Dockerfile is by default output to `./Dockerfile` (with root being where the command is run). Helm output to `./charts/`, Kustomize output to `./base` and `./overlays`, and normal K8s files to `./manifests/`.
 
-Applies manifests k8s cluster. Maybe this should be deploy? We give option of Helm, Kube, Kustomize.
+Flags
 
-TODO: how does this work for a private cluster? Could use command invoke https://learn.microsoft.com/en-us/azure/aks/command-invoke.
+- `--dockerfile-dest` changes the destination of the Dockerfile. Filename can be included here but defaults to Dockerfile.
+- `--k8s-dest` changes the destination of Kustomize, Kube, or Helm files.
+- `-t or --type` chooses the type of k8s files. Options are Helm, Kustomize, and Kube.
+- `--override` overrides existing files without prompts. By default the cli prompts.
+- `-y` accepts all defaults meaning the cli won't prompt.
+- `-c` or `--config` specifies the aks spin toml file location. Defaults to ./aks-spin.toml.
+
+If there's already helm files or kustomize files we merge our additions with the existing files.
+
+If we have already created these files, the cli handles updating them to the "latest versions".
+
+Included in the manifests is a KWASM deployment along with deployments + services for the spin application.
+
+The Dockerfile and k8s file locations are stored in the aks spin toml.
+
+#### spin aks deploy
+
+Applies manifests to the k8s cluster.
+
+Doesn't support private clusters for now. We can in the future pretty easily thanks to az aks command invoke.
 
 https://helm.sh/docs/topics/advanced/#go-sdk
 
+https://pkg.go.dev/sigs.k8s.io/kustomize/api/krusty#Kustomizer
+
 #### spin aks up
 
-todo: is this the right name?
+Goes through all steps to ensure your application is running. This is one command for all the things mentioned above.
 
-Goes through all steps to ensure your application is running
-
-
-
-## TODO: cluster provisioning, more detailed information about cluster / spin matrix, ensuring spin is okay for cluster
+All steps are idempotent and these commands can be used to update what's running in the cluster to a new application version.
 
 ## TODO: handle spin variables https://github.com/fermyon/spin/blob/a3d97b1aefb912ff02313875ab4f1b3c0364dac1/docs/content/sips/002-app-config.md and secrets. use annotations to seperate acr spin variables from others? Must support azure keyvault because k8s secrets are not secure.
 
