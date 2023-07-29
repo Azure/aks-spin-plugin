@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-func Parse() (*manifest, error) {
+func Load() (*manifest, error) {
 	v := viper.New()
 	v.SetConfigType("toml")
 	v.SetConfigName("spin")

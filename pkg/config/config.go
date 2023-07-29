@@ -2,9 +2,15 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"path"
 
-	"github.com/spf13/viper"
+	"github.com/BurntSushi/toml"
+)
+
+var (
+	c    config
+	opts *Opts
 )
 
 func (o *Opts) Default() {
@@ -13,46 +19,45 @@ func (o *Opts) Default() {
 	}
 
 	if o.path == "" {
-		o.path = "./aks-spin"
+		o.path = "./aks-spin.toml"
 	}
 }
 
-func getViper(opts *Opts) *viper.Viper {
+func Load(o Opts) error {
+	opts = &o
 	opts.Default()
-	filepath, filename := path.Split(opts.path)
 
-	v := viper.New()
-	v.SetConfigType("toml")
-	v.SetConfigName(filename)
-	v.AddConfigPath(filepath)
-	return v
-}
-
-func Parse(opts *Opts) (*config, error) {
-	v := getViper(opts)
-
-	if err := v.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("loading aks-spin-plugin config: %w", err)
+	// TODO: how to better handle some things being in env or flags?
+	if _, err := toml.DecodeFile(opts.path, &c); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("decoding aks spin config toml file %s: %w", opts.path, err)
 	}
 
-	c := &config{}
-	if err := v.Unmarshal(c); err != nil {
-		return nil, fmt.Errorf("unmarshalling aks-spin-plugin config: %w", err)
-	}
-
-	return c, nil
+	return nil
 }
 
-func (c *config) Write(opts *Opts) error {
-	v := getViper(opts)
+func Write() error {
+	// create directories if they don't exist
+	dirs := path.Dir(opts.path)
+	if _, err := os.Stat(dirs); err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("validating directories %s: %w", dirs, err)
+		}
 
-	if err := v.ReadInConfig(); err != nil {
-		if _, configNotFound := err.(viper.ConfigFileNotFoundError); !configNotFound {
-			return fmt.Errorf("reading current aks-spin-plugin config: %w", err)
+		if err := os.MkdirAll(dirs, os.ModeDir|0755); err != nil {
+			return fmt.Errorf("making directorie %s: %w", dirs, err)
 		}
 	}
 
-	// TODO: this won't work with viper. Viper has no support for marshalling struct back into viper config
+	// open file handles creating the file if it doesn't exist
+	f, err := os.OpenFile(opts.path, os.O_RDWR|os.O_CREATE, 0755)
+	if err != nil {
+		return fmt.Errorf("opening config file: %w", err)
+	}
+	defer f.Close()
+
+	if err := toml.NewEncoder(f).Encode(c); err != nil {
+		return fmt.Errorf("encoding aks spin config toml file %s: %w", opts.path, err)
+	}
 
 	return nil
 }
