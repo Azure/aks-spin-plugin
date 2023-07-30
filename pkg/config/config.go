@@ -44,7 +44,7 @@ func Write() error {
 		}
 
 		if err := os.MkdirAll(dirs, os.ModeDir|0755); err != nil {
-			return fmt.Errorf("making directorie %s: %w", dirs, err)
+			return fmt.Errorf("making directories %s: %w", dirs, err)
 		}
 	}
 
