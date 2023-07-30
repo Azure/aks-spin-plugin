@@ -2,7 +2,7 @@ package spin
 
 // https://developer.fermyon.com/spin/manifest-reference
 
-type manifest struct {
+type Manifest struct {
 	SpinVersion         string `mapstructure:"spin_version"`
 	SpinManifestVersion string `mapstructure:"spin_manifest_version"`
 	Name                string
@@ -11,7 +11,7 @@ type manifest struct {
 	Authors             []string
 	Trigger             manifestTrigger
 	Variables           variables
-	Component           []component
+	Components          []Component `toml:"component"`
 }
 
 type manifestTrigger struct {
@@ -27,15 +27,38 @@ type variables map[string]struct {
 	Secret   bool
 }
 
-type component struct {
-	Id               string
-	Description      string
-	// TODO: this field blocks unmarshalling
-	//Source           struct{}   // this is a sum type and must be handled in a special way
-	Files            []struct{} // this is a sum type and must be handled in a special way
-	ExcludeFiles     []string   `mapstructure:"exclude_files"`
-	AllowedHttpHosts []string   `mapstructure:"allowed_http_hosts"`
-	KeyValueStores   []string   `mapstructure:"key_value_stores"`
+// go-sumtype:decl ComponentSource
+type ComponentSource interface {
+	isComponentSource()
+}
+
+type ComponentSourceURL struct {
+	Url    string `toml:"url"`
+	Digest string `toml:"digest"`
+}
+
+func (ComponentSourceURL) isComponentSource() {}
+
+type ComponentSourceString string
+
+func (ComponentSourceString) isComponentSource() {}
+
+type rawManifest struct {
+	Components []rawComponent `toml:"component"`
+}
+
+type rawComponent struct {
+	Source interface{} `toml:"source"`
+}
+
+type Component struct {
+	Id               string          `toml:"id"`
+	Description      string          `toml:"description"`
+	Source           ComponentSource `toml:"never"`
+	Files            []struct{}      // this is a sum type and must be handled in a special way
+	ExcludeFiles     []string        `toml:"exclude_files"`
+	AllowedHttpHosts []string        `mapstructure:"allowed_http_hosts"`
+	KeyValueStores   []string        `mapstructure:"key_value_stores"`
 	Environment      map[string]string
 	Trigger          componentTrigger
 	Build            build
