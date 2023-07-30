@@ -1,9 +1,12 @@
 package prompt
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/manifoldco/promptui"
+	"github.com/manifoldco/promptui/list"
 )
 
 type SelectOpt[T any] struct {
@@ -12,26 +15,43 @@ type SelectOpt[T any] struct {
 }
 
 func Select[T any](label string, items []T, opt *SelectOpt[T]) (T, error) {
-	var selections interface{} = items
+	selections := make([]interface{}, len(items))
+	for i := range items {
+		selections[i] = items
+	}
 
 	if opt != nil && opt.Field != nil {
-		new := make([]string, len(items))
 		for i, item := range items {
-			new[i] = opt.Field(item)
+			selections[i] = opt.Field(item)
 		}
+	}
 
-		selections = new
+	if len(selections) == 0 {
+		return *new(T), errors.New("no selection options")
+	}
+
+	var searcher list.Searcher
+	if _, ok := selections[0].(string); ok {
+		searcher = func(search string, i int) bool {
+			str, _ := selections[i].(string) // no need to check if okay, we do that earlier
+
+			selection := strings.ToLower(str)
+			search = strings.ToLower(search)
+
+			return strings.Contains(selection, search)
+		}
 	}
 
 	p := promptui.Select{
-		Label: label,
-		Items: selections,
+		Label:    label,
+		Items:    selections,
+		Searcher: searcher,
 	}
 
-	idx, _, err := p.Run()
+	i, _, err := p.Run()
 	if err != nil {
 		return *new(T), fmt.Errorf("running select: %w", err)
 	}
 
-	return items[idx], nil
+	return items[i], nil
 }
