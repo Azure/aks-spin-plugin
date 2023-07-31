@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/manifoldco/promptui"
-	"github.com/manifoldco/promptui/list"
 )
 
 type SelectOpt[T any] struct {
@@ -30,16 +29,17 @@ func Select[T any](label string, items []T, opt *SelectOpt[T]) (T, error) {
 		return *new(T), errors.New("no selection options")
 	}
 
-	var searcher list.Searcher
-	if _, ok := selections[0].(string); ok {
-		searcher = func(search string, i int) bool {
-			str, _ := selections[i].(string) // no need to check if okay, we do that earlier
+	if _, ok := selections[0].(string); !ok {
+		return *new(T), errors.New("selections must be of type string or use opt.Field")
+	}
 
-			selection := strings.ToLower(str)
-			search = strings.ToLower(search)
+	searcher := func(search string, i int) bool {
+		str, _ := selections[i].(string) // no need to check if okay, we guard earlier
 
-			return strings.Contains(selection, search)
-		}
+		selection := strings.ToLower(str)
+		search = strings.ToLower(search)
+
+		return strings.Contains(selection, search)
 	}
 
 	p := promptui.Select{
