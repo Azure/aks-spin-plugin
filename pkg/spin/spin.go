@@ -40,11 +40,24 @@ func load(spinTomlContents []byte) (Manifest, error) {
 		v := reflect.ValueOf(rawSource)
 		switch v.Kind() {
 		case reflect.String:
-			sumTypeSource = ComponentSourceString(v.String())
+			s := ComponentSourceString(rawSource.(string))
+			sumTypeSource = s
 		case reflect.Map:
+			stringMap, ok := rawSource.(map[string]interface{})
+			if !ok {
+				return m, fmt.Errorf("casting component %d to map[string]interface{}", i)
+			}
+			url, ok := stringMap["url"].(string)
+			if !ok {
+				return m, fmt.Errorf("casting url on component %d", i)
+			}
+			digest, ok := stringMap["digest"].(string)
+			if !ok {
+				return m, fmt.Errorf("casting digest on component %d", i)
+			}
 			sumTypeSource = ComponentSourceURL{
-				Url:    v.MapIndex(reflect.ValueOf("url")).String(),
-				Digest: v.MapIndex(reflect.ValueOf("digest")).String(),
+				Url:    url,
+				Digest: digest,
 			}
 		default:
 			return m, fmt.Errorf("unknown component source type: %v", v.Kind())
