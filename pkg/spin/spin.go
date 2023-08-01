@@ -15,7 +15,10 @@ func Load() (Manifest, error) {
 		return m, fmt.Errorf("unable to open spin.toml file: %w", err)
 	}
 
-	m, err = load(spinTomlContents)
+	if m, err = load(spinTomlContents); err != nil {
+		return m, fmt.Errorf("unable to load spin.toml: %w", err)
+	}
+
 	return m, nil
 }
 
