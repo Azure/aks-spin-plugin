@@ -24,7 +24,6 @@ var initCmd = &cobra.Command{
 			return fmt.Errorf("loading config: %w", err)
 		}
 
-		// TODO: prompt user for value
 		subs, err := azure.ListSubscriptions(context.Background())
 		if err != nil {
 			return fmt.Errorf("listing subscriptions: %w", err)

@@ -7,6 +7,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v2 v2.4.0
 	github.com/manifoldco/promptui v0.9.0
 	github.com/spf13/cobra v1.7.0
+	golang.org/x/exp v0.0.0-20230728194245-b0cb94b80691
 )
 
 require (
