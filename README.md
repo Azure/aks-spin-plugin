@@ -1,6 +1,8 @@
 # spin-aks-plugin
 
-A Spin Azure Kubernetes Service plugin with cloud provider support
+A Spin Azure Kubernetes Service plugin with cloud provider support. This will make getting Spin applications onto AKS extremely easy and will support everything 99% of applications need. Applications can be triggered by either HTTP(s) or pub-sub (through Redis). Backend databases will be supported by either Azure Cosmos or Azure Redis. Secrets are supported through Azure KeyVault. Because applications are limited* by the Spin ecosystem and powered by the cross-platform nature of Web Assembly this tool can realistically be a straightforward user experience.
+
+*limited isn't the right word for this. The fact that the Spin ecosystem scopes down the things a user can do and forces them through the Spin way makes it truly possible to make a "managed" experience versus just containers are extremely hard to simplify due to the infinite number options (language, build tools, platform tooling like databases, are all solved by boxing to Spin ecosystem).
 
 ## Plan
 
