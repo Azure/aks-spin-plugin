@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/olivermking/spin-aks-plugin/pkg/config"
 	"github.com/olivermking/spin-aks-plugin/pkg/logger"
 	"github.com/spf13/cobra"
 )
@@ -41,11 +42,20 @@ func Execute(c Config) {
 	rootCmd.SetVersionTemplate(`{{printf "spin-aks-plugin %s" .Version}}
 `) // new line is deliberate because it renders better
 
-	// set verbose
+	// set global flags
 	var verbose bool
+	var spinAksConfig string
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "print additional information typically useful for debugging")
-	rootCmd.PersistentPreRun = func(_ *cobra.Command, _ []string) {
+	rootCmd.PersistentFlags().StringVarP(&spinAksConfig, "config", "c", "", "path to the spin aks config toml file")
+	rootCmd.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {
 		logger.SetVerbose(verbose)
+		if err := config.Load(config.Opts{
+			Path: spinAksConfig,
+		}); err != nil {
+			return fmt.Errorf("loading config: %w", err)
+		}
+
+		return nil
 	}
 
 	if err := rootCmd.Execute(); err != nil {

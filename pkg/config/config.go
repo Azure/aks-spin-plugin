@@ -13,31 +13,34 @@ var (
 	opts *Opts
 )
 
-func (o *Opts) Default() {
+// def sets empty options to their defaults
+func (o *Opts) def() {
 	if o == nil {
 		o = &Opts{}
 	}
 
-	if o.path == "" {
-		o.path = "./aks-spin.toml"
+	if o.Path == "" {
+		o.Path = "./aks-spin.toml"
 	}
 }
 
+// Load loads any current aks spin configs from a file or the environment, with precedence towards env variables
 func Load(o Opts) error {
 	opts = &o
-	opts.Default()
+	opts.def()
 
 	// TODO: how to better handle some things being in env or flags?
-	if _, err := toml.DecodeFile(opts.path, &c); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("decoding aks spin config toml file %s: %w", opts.path, err)
+	if _, err := toml.DecodeFile(opts.Path, &c); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("decoding aks spin config toml file %s: %w", opts.Path, err)
 	}
 
 	return nil
 }
 
+// Write writes the current aks spin config to a file
 func Write() error {
 	// create directories if they don't exist
-	dirs := path.Dir(opts.path)
+	dirs := path.Dir(opts.Path)
 	if _, err := os.Stat(dirs); err != nil {
 		if !os.IsNotExist(err) {
 			return fmt.Errorf("validating directories %s: %w", dirs, err)
@@ -49,14 +52,14 @@ func Write() error {
 	}
 
 	// open file handles creating the file if it doesn't exist
-	f, err := os.OpenFile(opts.path, os.O_RDWR|os.O_CREATE, 0755)
+	f, err := os.OpenFile(opts.Path, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		return fmt.Errorf("opening config file: %w", err)
 	}
 	defer f.Close()
 
 	if err := toml.NewEncoder(f).Encode(c); err != nil {
-		return fmt.Errorf("encoding aks spin config toml file %s: %w", opts.path, err)
+		return fmt.Errorf("encoding aks spin config toml file %s: %w", opts.Path, err)
 	}
 
 	return nil

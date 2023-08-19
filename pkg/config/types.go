@@ -2,7 +2,8 @@ package config
 
 // Opts are options for configuring the location of the config
 type Opts struct {
-	path string
+	// Path is the path to the spin aks config
+	Path string
 }
 
 type config struct {

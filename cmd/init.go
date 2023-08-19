@@ -20,10 +20,6 @@ var initCmd = &cobra.Command{
 	Short: "Creates the Spin AKS config describing how to deploy your application",
 	Long:  "Generates the Spin AKS config based on guided user input. The AKS Spin config file is used to store the deployment targets of your application.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := config.Load(config.Opts{}); err != nil {
-			return fmt.Errorf("loading config: %w", err)
-		}
-
 		subs, err := azure.ListSubscriptions(context.Background())
 		if err != nil {
 			return fmt.Errorf("listing subscriptions: %w", err)
