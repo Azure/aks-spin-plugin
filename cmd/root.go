@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/olivermking/spin-aks-plugin/pkg/logger"
 	"github.com/spf13/cobra"
 )
 
@@ -22,6 +23,12 @@ For more information, please visit the GitHub page at https://github.com/OliverM
 Report any feature requests or issues at https://github.com/OliverMKing/spin-aks-plugin/issues.`,
 }
 
+// Config describes dynamic variables for the cmd which should be set at build time
+type Config struct {
+	// Version is the version of the tool
+	Version string
+}
+
 func Execute(c Config) {
 	rootCmd.Version = c.Version // if version is empty the only consequence should be the version command not working
 
@@ -33,6 +40,13 @@ func Execute(c Config) {
 		).Replace(rootCmd.UsageTemplate()))
 	rootCmd.SetVersionTemplate(`{{printf "spin-aks-plugin %s" .Version}}
 `) // new line is deliberate because it renders better
+
+	// set verbose
+	var verbose bool
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "print additional information typically useful for debugging")
+	rootCmd.PersistentPreRun = func(_ *cobra.Command, _ []string) {
+		logger.SetVerbose(verbose)
+	}
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)

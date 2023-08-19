@@ -23,5 +23,5 @@ func FromContext(ctx context.Context) *slog.Logger {
 		return logger
 	}
 
-	return getDef()
+	return new()
 }
