@@ -6,6 +6,7 @@ import (
 	"path"
 
 	"github.com/BurntSushi/toml"
+	"github.com/caarlos0/env/v9"
 )
 
 var (
@@ -32,6 +33,13 @@ func Load(o Opts) error {
 	// TODO: how to better handle some things being in env or flags?
 	if _, err := toml.DecodeFile(opts.Path, &c); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("decoding aks spin config toml file %s: %w", opts.Path, err)
+	}
+
+	if err := env.ParseWithOptions(&c, env.Options{
+		Prefix:                "AKS_SPIN_",
+		UseFieldNameByDefault: true,
+	}); err != nil {
+		return fmt.Errorf("parsing aks spin config from env variables: %w", err)
 	}
 
 	return nil
