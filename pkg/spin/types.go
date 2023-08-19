@@ -3,8 +3,8 @@ package spin
 // https://developer.fermyon.com/spin/manifest-reference
 
 type Manifest struct {
-	SpinVersion         string `mapstructure:"spin_version"`
-	SpinManifestVersion string `mapstructure:"spin_manifest_version"`
+	SpinVersion         string
+	SpinManifestVersion string
 	Name                string
 	Version             string
 	Description         string
@@ -22,7 +22,7 @@ type manifestTrigger struct {
 
 type variables map[string]struct {
 	// def default value of variable
-	Def      string `mapstructure:"default"`
+	Def      string `toml:"default"`
 	Required bool
 	Secret   bool
 }
@@ -57,8 +57,8 @@ type Component struct {
 	Source           ComponentSource `toml:"never"`
 	Files            []struct{}      // this is a sum type and must be handled in a special way
 	ExcludeFiles     []string        `toml:"exclude_files"`
-	AllowedHttpHosts []string        `mapstructure:"allowed_http_hosts"`
-	KeyValueStores   []string        `mapstructure:"key_value_stores"`
+	AllowedHttpHosts []string        `toml:"allowed_http_hosts"`
+	KeyValueStores   []string        `toml:"key_value_stores"`
 	Environment      map[string]string
 	Trigger          componentTrigger
 	Build            build
@@ -73,7 +73,7 @@ type componentTrigger struct {
 
 type executor struct {
 	// t type of executor
-	t          string `mapstructure:"type"`
+	t          string `toml:"type"`
 	argv       string
 	entrypoint string
 }

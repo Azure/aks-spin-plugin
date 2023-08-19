@@ -7,21 +7,21 @@ type Opts struct {
 }
 
 type config struct {
-	Cluster           Cluster
-	ContainerRegistry ContainerRegistry
+	Cluster           Cluster           `toml:"cluster"`
+	ContainerRegistry ContainerRegistry `toml:"container_registry"`
 	// spinManifest is the path to the Spin manifest file (spin.toml)
-	SpinManifest string
+	SpinManifest string `toml:"spin_manifest"`
 	// dockerfile is the path to the Dockerfile
-	Dockerfile string
+	Dockerfile string `toml:"dockerfile"`
 	// k8sResources is the path to the Kubernetes resource files
-	K8sResources string
-	Store        Store
+	K8sResources string `toml:"kubernetes_resources"`
+	Store        Store  `toml:"store,omitempty"`
 }
 
 type ResourceId struct {
-	subscription  string
-	resourceGroup string
-	name          string
+	subscription  string `toml:"subscription"`
+	resourceGroup string `toml:"resource_group"`
+	name          string `toml:"name"`
 }
 
 type Cluster struct {
@@ -40,6 +40,6 @@ var (
 )
 
 type Store struct {
-	kind storeKind
+	Kind storeKind `toml:"kind"`
 	ResourceId
 }

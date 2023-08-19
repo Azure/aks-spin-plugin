@@ -30,7 +30,6 @@ func Load(o Opts) error {
 	opts = &o
 	opts.def()
 
-	// TODO: how to better handle some things being in env or flags?
 	if _, err := toml.DecodeFile(opts.Path, &c); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("decoding aks spin config toml file %s: %w", opts.Path, err)
 	}
