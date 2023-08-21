@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/olivermking/spin-aks-plugin/pkg/usererror"
 )
 
 var (
@@ -18,7 +19,7 @@ func getCred() (*azidentity.DefaultAzureCredential, error) {
 	var err error
 	cred, err = azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
-		return nil, fmt.Errorf("authenticating to Azure: %w", err)
+		return nil, usererror.New(fmt.Errorf("authenticating to Azure: %w", err), "Unable to authenticate to Azure. Try running \"az login\".")
 	}
 
 	return cred, nil

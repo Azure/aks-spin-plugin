@@ -50,6 +50,10 @@ func (h *handler) Enabled(ctx context.Context, l slog.Level) bool {
 func (h *handler) Handle(ctx context.Context, r slog.Record) error {
 	output := []interface{}{r.Message}
 
+	if r.Level > slog.LevelWarn {
+		output = append([]interface{}{r.Level.String()}, output...)
+	}
+
 	r.Attrs(func(a slog.Attr) bool {
 		output = append(output, a)
 		return true

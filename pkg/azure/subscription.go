@@ -6,9 +6,13 @@ import (
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/subscription/armsubscription"
+	"github.com/olivermking/spin-aks-plugin/pkg/logger"
 )
 
 func ListSubscriptions(ctx context.Context) ([]armsubscription.Subscription, error) {
+	lgr := logger.FromContext(ctx)
+	lgr.Debug("listing Azure subscriptions")
+
 	cred, err := getCred()
 	if err != nil {
 		return nil, fmt.Errorf("getting credentials: %w", err)
@@ -36,5 +40,6 @@ func ListSubscriptions(ctx context.Context) ([]armsubscription.Subscription, err
 		}
 	}
 
+	lgr.Debug("finished listing Azure subscriptions")
 	return subs, nil
 }

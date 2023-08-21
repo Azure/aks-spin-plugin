@@ -1,18 +1,21 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/olivermking/spin-aks-plugin/pkg/config"
 	"github.com/olivermking/spin-aks-plugin/pkg/logger"
+	"github.com/olivermking/spin-aks-plugin/pkg/usererror"
 	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "aks", // this is really spin aks but must be defined in the templates
-	Short: "A Spin Plugin for Azure Kubernetes Service",
+	SilenceErrors: true,  // we handle printing error information ourselves in Execute fn
+	Use:           "aks", // this is really spin aks but must be defined in the templates
+	Short:         "A Spin Plugin for Azure Kubernetes Service",
 	Long: `Spin AKS is a Spin Plugin that guides users through deploying Spin applications to Azure Kubernetes Service.
 	
 To walk through all deploy steps, run the 'spin aks up' command.
@@ -31,7 +34,7 @@ type Config struct {
 }
 
 func Execute(c Config) {
-	rootCmd.Version = c.Version // if version is empty the only consequence should be the version command not working
+	rootCmd.Version = c.Version // if version is empty the only consequence should be the version command not working. We shouldn't panic or fail because of that.
 
 	// need to prefix command use with "spin" because it's a spin plugin
 	rootCmd.SetUsageTemplate(
@@ -58,8 +61,20 @@ func Execute(c Config) {
 		return nil
 	}
 
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
+	ctx := context.Background()
+	lgr := logger.FromContext(ctx)
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
+		errMsg := fmt.Sprintf("%s", err)
+
+		if ue, ok := usererror.Is(err); ok {
+			if verbose {
+				lgr.Error(errMsg)
+			}
+
+			errMsg = ue.Msg()
+		}
+
+		lgr.Error(errMsg)
 		os.Exit(1)
 	}
 }
