@@ -19,9 +19,9 @@ type config struct {
 }
 
 type ResourceId struct {
-	subscription  string `toml:"subscription"`
-	resourceGroup string `toml:"resource_group"`
-	name          string `toml:"name"`
+	Subscription  string `toml:"subscription"`
+	ResourceGroup string `toml:"resource_group"`
+	Name          string `toml:"name"`
 }
 
 type Cluster struct {

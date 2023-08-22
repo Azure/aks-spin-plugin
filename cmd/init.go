@@ -3,11 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/subscription/armsubscription"
-	"github.com/olivermking/spin-aks-plugin/pkg/azure"
 	"github.com/olivermking/spin-aks-plugin/pkg/config"
 	"github.com/olivermking/spin-aks-plugin/pkg/logger"
-	"github.com/olivermking/spin-aks-plugin/pkg/prompt"
 	"github.com/spf13/cobra"
 )
 
@@ -24,23 +21,9 @@ var initCmd = &cobra.Command{
 		lgr := logger.FromContext(ctx)
 		lgr.Debug("starting init command")
 
-		subs, err := azure.ListSubscriptions(ctx)
-		if err != nil {
-			return fmt.Errorf("listing subscriptions: %w", err)
+		if err := config.EnsureCluster(ctx); err != nil {
+			return fmt.Errorf("ensuring config cluster: %w", err)
 		}
-
-		lgr.Debug("prompting for subscription")
-		sub, err := prompt.Select("Select a Subscription", subs, &prompt.SelectOpt[armsubscription.Subscription]{
-			Field: func(t armsubscription.Subscription) string {
-				return *t.DisplayName
-			},
-		})
-		if err != nil {
-			return fmt.Errorf("selecting subscription: %w", err)
-		}
-		lgr.Debug("finished prompting for subscription")
-
-		fmt.Println(*sub.DisplayName)
 
 		if err := config.Write(); err != nil {
 			return fmt.Errorf("writting config: %w", err)

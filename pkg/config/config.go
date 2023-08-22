@@ -1,12 +1,19 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/subscription/armsubscription"
 	"github.com/BurntSushi/toml"
 	"github.com/caarlos0/env/v9"
+	"github.com/olivermking/spin-aks-plugin/pkg/azure"
+	"github.com/olivermking/spin-aks-plugin/pkg/logger"
+	"github.com/olivermking/spin-aks-plugin/pkg/prompt"
+	"github.com/olivermking/spin-aks-plugin/pkg/usererror"
 )
 
 var (
@@ -42,6 +49,57 @@ func Load(o Opts) error {
 	}
 
 	return nil
+}
+
+func EnsureCluster(ctx context.Context) error {
+	lgr := logger.FromContext(ctx)
+	lgr.Debug("starting to ensure cluster config")
+
+	if c.Cluster.Subscription == "" {
+		subs, err := azure.ListSubscriptions(ctx)
+		if err != nil {
+			return fmt.Errorf("listing subscriptions: %w", err)
+		}
+
+		lgr.Debug("prompting for cluster subscription")
+		sub, err := prompt.Select("Select your Cluster's Subscription", subs, &prompt.SelectOpt[armsubscription.Subscription]{
+			Field: func(t armsubscription.Subscription) string {
+				return *t.DisplayName
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("selecting subscription: %w", err)
+		}
+		c.Cluster.Subscription = *sub.SubscriptionID
+		lgr.Debug("finished prompting for cluster subscription")
+	}
+
+	if c.Cluster.ResourceGroup == "" {
+		rgs, err := azure.ListResourceGroups(ctx, c.Cluster.Subscription)
+		if err != nil {
+			return fmt.Errorf("listing resource groups: %w", err)
+		}
+
+		lgr.Debug("prompting for cluster resource group")
+		rg, err := prompt.Select("Select your Cluster's Resource Group", rgs, &prompt.SelectOpt[armresources.ResourceGroup]{
+			Field: func(t armresources.ResourceGroup) string {
+				return *t.Name
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("selecting resource group: %w", err)
+		}
+		c.Cluster.ResourceGroup = *rg.Name
+
+		lgr.Debug("finished prompting for cluster resource group")
+	}
+
+	lgr.Debug("done ensuring cluster config")
+	return nil
+}
+
+func fieldEmptyErr(field string) error {
+	return usererror.New(fmt.Errorf("validating aks spin config: %s invalid", field), fmt.Sprintf("AKS Spin Config invalid. Field %s is empty.", field))
 }
 
 // Write writes the current aks spin config to a file
