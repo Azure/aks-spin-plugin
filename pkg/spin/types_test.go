@@ -18,10 +18,9 @@ func TestSpinToml(t *testing.T) {
 	source = "source-string"
 	files = {source="source.txt",destination="destination.txt"}
 	[[component]]
-	id = "last"
+	id = "string_and_map_files"
 	files = ["source-1","source-2",{source="source-3",destination="destination-3"}]
 	`
-	// eventually test an array of strings and maps
 
 	expectedManifest := Manifest{
 		Components: []Component{
@@ -54,7 +53,7 @@ func TestSpinToml(t *testing.T) {
 				},
 			},
 			{
-				Id: "last",
+				Id: "string_and_map_files",
 				Files: ComponentFiles{
 					StringFiles: []ComponentFileString{
 						ComponentFileString("source-1"),
