@@ -1,0 +1,20 @@
+# General identification information
+spin_manifest_version = "1"
+name = "spin-hello-world"
+version = "1.0.0"
+description = "A simple application that returns hello world."
+# The application trigger. This application responds to HTTP requests
+trigger = { type = "http", base = "/" }
+
+# The single component
+[[component]]
+id = "hello"
+description = "A simple component that returns hello world."
+# The Wasm module to run for the component
+source = "target/wasm32-wasi/release/helloworld.wasm"
+# The component trigger. This component responds to HTTP requests to "/hello"
+[component.trigger]
+route = "/hello"
+# How to build the Wasm module from source
+[component.build]
+command = "cargo build --target wasm32-wasi --release"

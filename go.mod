@@ -15,6 +15,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.3.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v1.1.1 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.0.0 // indirect
+	github.com/BurntSushi/go-sumtype v0.0.0-20221020234012-480526a59796 // indirect
 	github.com/caarlos0/env/v9 v9.0.0 // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
@@ -23,9 +24,11 @@ require (
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/stretchr/testify v1.8.3 // indirect
 	golang.org/x/crypto v0.11.0 // indirect
+	golang.org/x/mod v0.11.0 // indirect
 	golang.org/x/net v0.12.0 // indirect
 	golang.org/x/sys v0.10.0 // indirect
 	golang.org/x/text v0.11.0 // indirect
+	golang.org/x/tools v0.6.0 // indirect
 )
 
 require (

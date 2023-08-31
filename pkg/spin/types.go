@@ -27,35 +27,11 @@ type variables map[string]struct {
 	Secret   bool
 }
 
-// go-sumtype:decl ComponentSource
-type ComponentSource interface {
-	isComponentSource()
-}
-
-type ComponentSourceURL struct {
-	Url    string `toml:"url"`
-	Digest string `toml:"digest"`
-}
-
-func (ComponentSourceURL) isComponentSource() {}
-
-type ComponentSourceString string
-
-func (ComponentSourceString) isComponentSource() {}
-
-type rawManifest struct {
-	Components []rawComponent `toml:"component"`
-}
-
-type rawComponent struct {
-	Source interface{} `toml:"source"`
-}
-
 type Component struct {
 	Id               string          `toml:"id"`
 	Description      string          `toml:"description"`
-	Source           ComponentSource `toml:"never"`
-	Files            []struct{}      // this is a sum type and must be handled in a special way
+	Source           ComponentSource `toml:"never_source"` // this type shouldn't be read from the toml
+	Files            ComponentFiles  `toml:"never_files"`  // this is a sum type and must be handled in a special way
 	ExcludeFiles     []string        `toml:"exclude_files"`
 	AllowedHttpHosts []string        `toml:"allowed_http_hosts"`
 	KeyValueStores   []string        `toml:"key_value_stores"`

@@ -12,22 +12,62 @@ func TestSpinToml(t *testing.T) {
 	[[component]]
 	id = "hello"
 	source = {url="hello.wasm",digest="test-digest"}
+	files = "hello.txt"
 	[[component]]
 	id = "world"
 	source = "source-string"
+	files = {source="source.txt",destination="destination.txt"}
+	[[component]]
+	id = "last"
+	files = ["source-1","source-2",{source="source-3",destination="destination-3"}]
 	`
+	// eventually test an array of strings and maps
 
 	expectedManifest := Manifest{
 		Components: []Component{
 			Component{
 				Id: "hello",
-				Source: ComponentSourceURL{
-					Url:    "hello.wasm",
-					Digest: "test-digest",
-				}},
+				Source: ComponentSource{
+					URLSource: ComponentSourceURL{
+						Url:    "hello.wasm",
+						Digest: "test-digest",
+					},
+				},
+				Files: ComponentFiles{
+					StringFiles: []ComponentFileString{
+						ComponentFileString("hello.txt"),
+					},
+				},
+			},
 			{
-				Id:     "world",
-				Source: ComponentSourceString("source-string")},
+				Id: "world",
+				Source: ComponentSource{
+					StringSource: ComponentSourceString("source-string"),
+				},
+				Files: ComponentFiles{
+					MapFiles: []ComponentFileMap{
+						{
+							Source:      "source.txt",
+							Destination: "destination.txt",
+						},
+					},
+				},
+			},
+			{
+				Id: "last",
+				Files: ComponentFiles{
+					StringFiles: []ComponentFileString{
+						ComponentFileString("source-1"),
+						ComponentFileString("source-2"),
+					},
+					MapFiles: []ComponentFileMap{
+						{
+							Source:      "source-3",
+							Destination: "destination-3",
+						},
+					},
+				},
+			},
 		},
 	}
 
