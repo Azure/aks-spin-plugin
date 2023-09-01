@@ -4,11 +4,10 @@ import (
 	"context"
 	"io"
 	"log"
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
-
-	"golang.org/x/exp/slog"
 )
 
 var (
