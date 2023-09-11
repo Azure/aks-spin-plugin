@@ -9,11 +9,11 @@ type Opts struct {
 type config struct {
 	Cluster           Cluster           `toml:"cluster"`
 	ContainerRegistry ContainerRegistry `toml:"container_registry"`
-	// spinManifest is the path to the Spin manifest file (spin.toml)
+	// SpinManifest is the path to the Spin manifest file (spin.toml)
 	SpinManifest string `toml:"spin_manifest"`
-	// dockerfile is the path to the Dockerfile
+	// Dockerfile is the path to the Dockerfile
 	Dockerfile string `toml:"dockerfile"`
-	// k8sResources is the path to the Kubernetes resource files
+	// K8sResources is the path to the Kubernetes resource files
 	K8sResources string `toml:"kubernetes_resources"`
 	Store        Store  `toml:"store,omitempty"`
 }
