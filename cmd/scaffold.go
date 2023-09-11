@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/olivermking/spin-aks-plugin/pkg/spin"
+	"github.com/azure/spin-aks-plugin/pkg/spin"
 	"github.com/spf13/cobra"
 )
 

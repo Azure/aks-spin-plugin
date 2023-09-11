@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
-	"github.com/olivermking/spin-aks-plugin/pkg/logger"
+	"github.com/azure/spin-aks-plugin/pkg/logger"
 )
 
 func ListResourceGroups(ctx context.Context, sub string) ([]armresources.ResourceGroup, error) {

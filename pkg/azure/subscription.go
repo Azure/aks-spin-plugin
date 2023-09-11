@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/subscription/armsubscription"
-	"github.com/olivermking/spin-aks-plugin/pkg/logger"
+	"github.com/azure/spin-aks-plugin/pkg/logger"
 )
 
 func ListSubscriptions(ctx context.Context) ([]armsubscription.Subscription, error) {

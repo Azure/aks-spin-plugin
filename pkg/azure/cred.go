@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/olivermking/spin-aks-plugin/pkg/usererror"
+	"github.com/azure/spin-aks-plugin/pkg/usererror"
 )
 
 var (

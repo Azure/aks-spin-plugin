@@ -1,4 +1,4 @@
-module github.com/olivermking/spin-aks-plugin
+module github.com/azure/spin-aks-plugin
 
 go 1.21
 
