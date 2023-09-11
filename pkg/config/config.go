@@ -9,11 +9,11 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/subscription/armsubscription"
 	"github.com/BurntSushi/toml"
+	"github.com/azure/spin-aks-plugin/pkg/azure"
+	"github.com/azure/spin-aks-plugin/pkg/logger"
+	"github.com/azure/spin-aks-plugin/pkg/prompt"
+	"github.com/azure/spin-aks-plugin/pkg/usererror"
 	"github.com/caarlos0/env/v9"
-	"github.com/olivermking/spin-aks-plugin/pkg/azure"
-	"github.com/olivermking/spin-aks-plugin/pkg/logger"
-	"github.com/olivermking/spin-aks-plugin/pkg/prompt"
-	"github.com/olivermking/spin-aks-plugin/pkg/usererror"
 )
 
 var (

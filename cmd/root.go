@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/olivermking/spin-aks-plugin/pkg/config"
-	"github.com/olivermking/spin-aks-plugin/pkg/logger"
-	"github.com/olivermking/spin-aks-plugin/pkg/usererror"
+	"github.com/azure/spin-aks-plugin/pkg/config"
+	"github.com/azure/spin-aks-plugin/pkg/logger"
+	"github.com/azure/spin-aks-plugin/pkg/usererror"
 	"github.com/spf13/cobra"
 )
 
@@ -22,9 +22,9 @@ To walk through all deploy steps, run the 'spin aks up' command.
 
 	$ spin aks up
 
-For more information, please visit the GitHub page at https://github.com/OliverMKing/spin-aks-plugin.
+For more information, please visit the GitHub page at https://github.com/azure/spin-aks-plugin.
 
-Report any feature requests or issues at https://github.com/OliverMKing/spin-aks-plugin/issues.`,
+Report any feature requests or issues at https://github.com/azure/spin-aks-plugin/issues.`,
 }
 
 // Config describes dynamic variables for the cmd which should be set at build time
