@@ -21,12 +21,12 @@ var initCmd = &cobra.Command{
 		lgr := logger.FromContext(ctx)
 		lgr.Debug("starting init command")
 
-		if err := config.EnsureCluster(ctx); err != nil {
-			return fmt.Errorf("ensuring config cluster: %w", err)
+		if err := config.EnsureValid(ctx); err != nil {
+			return fmt.Errorf("ensuring config: %w", err)
 		}
 
 		if err := config.Write(); err != nil {
-			return fmt.Errorf("writting config: %w", err)
+			return fmt.Errorf("writing config: %w", err)
 		}
 
 		lgr.Debug("finished init command")
