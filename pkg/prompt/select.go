@@ -15,8 +15,8 @@ type SelectOpt[T any] struct {
 
 func Select[T any](label string, items []T, opt *SelectOpt[T]) (T, error) {
 	selections := make([]interface{}, len(items))
-	for i := range items {
-		selections[i] = items
+	for i, item := range items {
+		selections[i] = item
 	}
 
 	if opt != nil && opt.Field != nil {
