@@ -44,3 +44,29 @@ func ListResourceGroups(ctx context.Context, sub string) ([]armresources.Resourc
 	lgr.Debug("finished listing Azure resource groups")
 	return rgs, nil
 }
+
+func NewResourceGroup(ctx context.Context, sub, name, location string) error {
+	lgr := logger.FromContext(ctx).With("subscription", sub, "name", name, "location", location)
+	ctx = logger.WithContext(ctx, lgr)
+	lgr.Debug("creating Azure resource group")
+
+	cred, err := getCred()
+	if err != nil {
+		return fmt.Errorf("getting credentials: %w", err)
+	}
+
+	client, err := armresources.NewResourceGroupsClient(sub, cred, nil)
+	if err != nil {
+		return fmt.Errorf("creating resource groups client: %w", err)
+	}
+
+	if _, err := client.CreateOrUpdate(ctx, name, armresources.ResourceGroup{
+		Name:     &name,
+		Location: &location,
+	}, nil); err != nil {
+		return fmt.Errorf("creating resource group: %w", err)
+	}
+
+	lgr.Debug("finished creating Azure resource group")
+	return nil
+}
