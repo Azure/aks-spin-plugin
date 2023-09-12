@@ -113,30 +113,19 @@ func ensureAcr(ctx context.Context) error {
 	if c.ContainerRegistry.ResourceGroup == "" {
 		rg, err := getResourceGroup(ctx, c.ContainerRegistry.Subscription, "Container Registry's")
 		if err != nil {
-			return fmt.Errorf("getting container registry's resource group")
+			return fmt.Errorf("getting container registry's resource group: %w", err)
 		}
 
 		c.ContainerRegistry.ResourceGroup = rg
 	}
 
 	if c.ContainerRegistry.Name == "" {
-		acrs, err := azure.ListContainerRegistries(ctx, c.ContainerRegistry.Subscription, c.ContainerRegistry.ResourceGroup)
+		acr, err := getContainerRegistry(ctx, c.ContainerRegistry.Subscription, c.ContainerRegistry.ResourceGroup)
 		if err != nil {
-			return fmt.Errorf("listing acrs: %w", err)
+			return fmt.Errorf("getting container registry's name: %w", err)
 		}
 
-		lgr.Debug("prompting for acr name")
-		acr, err := prompt.Select("Select your Container Registry", acrs, &prompt.SelectOpt[armcontainerregistry.Registry]{
-			Field: func(t armcontainerregistry.Registry) string {
-				return *t.Name
-			},
-		})
-		if err != nil {
-			return fmt.Errorf("selecting acr: %w")
-		}
-
-		c.ContainerRegistry.Name = *acr.Name
-		lgr.Debug("finished prompting for acr name")
+		c.ContainerRegistry.Name = acr
 	}
 
 	lgr.Debug("done ensuring acr config")
@@ -297,9 +286,74 @@ func getCluster(ctx context.Context, subscriptionId, resourceGroup string) (stri
 	if err := azure.NewCluster(ctx, subscriptionId, resourceGroup, name, *location.Name); err != nil {
 		return "", fmt.Errorf("creating new managed cluster: %w", err)
 	}
-	lgr.Info("created Manage Cluster " + name)
+	lgr.Info("created Managed Cluster " + name)
 
 	lgr.Debug("finished getting cluster")
+	return name, nil
+}
+
+func getContainerRegistry(ctx context.Context, subscriptionId, resourceGroup string) (string, error) {
+	lgr := logger.FromContext(ctx)
+	lgr.Debug("starting to get container registry")
+
+	if subscriptionId == "" {
+		return "", errors.New("subscriptionId is empty")
+	}
+	if resourceGroup == "" {
+		return "", errors.New("resourceGroup is empty")
+	}
+
+	acrs, err := azure.ListContainerRegistries(ctx, c.ContainerRegistry.Subscription, c.ContainerRegistry.ResourceGroup)
+	if err != nil {
+		return "", fmt.Errorf("listing acrs: %w", err)
+	}
+
+	acrsWithNew := withNew(acrs)
+	selection, err := prompt.Select("Select your Container Registry", acrsWithNew, &prompt.SelectOpt[newish[armcontainerregistry.Registry]]{
+		Field: func(t newish[armcontainerregistry.Registry]) string {
+			if t.IsNew {
+				return "New Container Registry"
+			}
+
+			return *t.Data.Name
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("selecting container registry: %w", err)
+	}
+
+	if !selection.IsNew {
+		lgr.Debug("finished getting container registry")
+		return *selection.Data.Name, nil
+	}
+
+	name, err := prompt.Input("Input your new Container Registry name", &prompt.InputOpt{
+		Validate: validateContainerRegistry,
+	})
+	if err != nil {
+		return "", fmt.Errorf("inputting new container registry name: %w", err)
+	}
+
+	locations, err := azure.ListLocations(ctx, subscriptionId)
+	if err != nil {
+		return "", fmt.Errorf("listing locations: %w", err)
+	}
+
+	location, err := prompt.Select("Input your new Container Registry location", locations, &prompt.SelectOpt[armsubscriptions.Location]{
+		Field: func(t armsubscriptions.Location) string {
+			return *t.DisplayName
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("selecting new container registry location: %w", err)
+	}
+
+	if err := azure.NewContainerRegistry(ctx, subscriptionId, resourceGroup, name, *location.Name); err != nil {
+		return "", fmt.Errorf("creating new container registry: %w", err)
+	}
+	lgr.Info("created Container Registry " + name)
+
+	lgr.Debug("finished getting container registry")
 	return name, nil
 }
 
@@ -369,6 +423,18 @@ func validateCluster(cluster string) error {
 
 	if !alphanumRegex.MatchString(cluster[len(cluster)-1:]) {
 		return errors.New("must end with an alphanumeric character")
+	}
+
+	return nil
+}
+
+func validateContainerRegistry(cr string) error {
+	if len(cr) == 0 || len(cr) > 50 {
+		return errors.New("must be between 1 and 50 characters long")
+	}
+
+	if !alphanumRegex.MatchString(cr) {
+		return errors.New("must contain only alphanumerics")
 	}
 
 	return nil

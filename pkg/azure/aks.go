@@ -67,7 +67,7 @@ func NewCluster(ctx context.Context, subscriptionId, resourceGroup, name, locati
 		return fmt.Errorf("getting aks client: %w", err)
 	}
 
-	lgr.Info("creating new managed cluster")
+	lgr.Info("creating new Managed Cluster")
 	poll, err := client.NewManagedClustersClient().BeginCreateOrUpdate(ctx, resourceGroup, name, armcontainerservice.ManagedCluster{
 		// matches dev/test preset cluster configuration
 		Name:     &name,
