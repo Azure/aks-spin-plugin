@@ -2,3 +2,4 @@
 .vscode/
 spin.toml
 launch.json
+spin-aks-plugin
