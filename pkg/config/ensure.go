@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"regexp"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v2"
@@ -15,6 +16,12 @@ import (
 	"github.com/azure/spin-aks-plugin/pkg/azure"
 	"github.com/azure/spin-aks-plugin/pkg/logger"
 	"github.com/azure/spin-aks-plugin/pkg/prompt"
+)
+
+var (
+	alphanumUnderscoreParenHyphenPeriodRegex = regexp.MustCompile("^[a-zA-Z0-9_()\\-.]+$")
+	alphanumUnderscoreHyphenRegex            = regexp.MustCompile("^[a-zA-Z0-9_\\-]+$")
+	alphanumRegex                            = regexp.MustCompile("^[a-zA-Z0-9]+$")
 )
 
 // EnsureValid prompts users for all required fields
@@ -67,23 +74,12 @@ func ensureCluster(ctx context.Context) error {
 	}
 
 	if c.Cluster.Name == "" {
-		clusters, err := azure.ListClusters(ctx, c.Cluster.Subscription, c.Cluster.ResourceGroup)
+		cluster, err := getCluster(ctx, c.Cluster.Subscription, c.Cluster.ResourceGroup)
 		if err != nil {
-			return fmt.Errorf("listing clusters: %w", err)
+			return fmt.Errorf("getting cluster name: %w", err)
 		}
 
-		lgr.Debug("prompting for cluster name")
-		cluster, err := prompt.Select("Select your Cluster", clusters, &prompt.SelectOpt[armcontainerservice.ManagedCluster]{
-			Field: func(t armcontainerservice.ManagedCluster) string {
-				return *t.Name
-			},
-		})
-		if err != nil {
-			return fmt.Errorf("selecting cluster: %w", err)
-		}
-
-		c.Cluster.Name = *cluster.Name
-		lgr.Debug("finished prompting for cluster name")
+		c.Cluster.Name = cluster
 	}
 
 	lgr.Debug("done ensuring cluster config")
@@ -193,7 +189,7 @@ func getResourceGroup(ctx context.Context, subscriptionId, possessive string) (s
 	}
 
 	rgsWithNew := withNew(rgs)
-	lgr.Debug(fmt.Sprintf("prompting for %s resource group"), possessive)
+	lgr.Debug(fmt.Sprintf("prompting for %s resource group", possessive))
 	selection, err := prompt.Select(fmt.Sprintf("Select your %s Resource Group", possessive), rgsWithNew, &prompt.SelectOpt[newish[armresources.ResourceGroup]]{
 		Field: func(t newish[armresources.ResourceGroup]) string {
 			if t.IsNew {
@@ -212,7 +208,9 @@ func getResourceGroup(ctx context.Context, subscriptionId, possessive string) (s
 		return *selection.Data.Name, nil
 	}
 
-	name, err := prompt.Input("Input your new Resource Group name", &prompt.InputOpt{})
+	name, err := prompt.Input("Input your new Resource Group name", &prompt.InputOpt{
+		Validate: validateResourceGroup,
+	})
 	if err != nil {
 		return "", fmt.Errorf("inputting new resource group name: %w", err)
 	}
@@ -234,8 +232,74 @@ func getResourceGroup(ctx context.Context, subscriptionId, possessive string) (s
 	if err := azure.NewResourceGroup(ctx, subscriptionId, name, *location.Name); err != nil {
 		return "", fmt.Errorf("creating new resource group: %w", err)
 	}
+	lgr.Info("created Resource Group " + name)
 
 	lgr.Debug(fmt.Sprintf("finished getting %s resource group", possessive))
+	return name, nil
+}
+
+func getCluster(ctx context.Context, subscriptionId, resourceGroup string) (string, error) {
+	lgr := logger.FromContext(ctx)
+	lgr.Debug("starting to get cluster")
+
+	if subscriptionId == "" {
+		return "", errors.New("subscriptionId is  empty")
+	}
+	if resourceGroup == "" {
+		return "", errors.New("resourceGroup is empty")
+	}
+
+	clusters, err := azure.ListClusters(ctx, c.Cluster.Subscription, c.Cluster.ResourceGroup)
+	if err != nil {
+		return "", fmt.Errorf("listing clusters: %w", err)
+	}
+
+	clustersWithNew := withNew(clusters)
+	selection, err := prompt.Select("Select your Cluster", clustersWithNew, &prompt.SelectOpt[newish[armcontainerservice.ManagedCluster]]{
+		Field: func(t newish[armcontainerservice.ManagedCluster]) string {
+			if t.IsNew {
+				return "New Managed Cluster"
+			}
+
+			return *t.Data.Name
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("selecting cluster: %w", err)
+	}
+
+	if !selection.IsNew {
+		lgr.Debug("finished getting cluster")
+		return *selection.Data.Name, nil
+	}
+
+	name, err := prompt.Input("Input your new Managed Cluster name", &prompt.InputOpt{
+		Validate: validateCluster,
+	})
+	if err != nil {
+		return "", fmt.Errorf("inputting new managed cluster name: %w", err)
+	}
+
+	locations, err := azure.ListLocations(ctx, subscriptionId)
+	if err != nil {
+		return "", fmt.Errorf("listing locations: %w", err)
+	}
+
+	location, err := prompt.Select("Input your new Managed Cluster location", locations, &prompt.SelectOpt[armsubscriptions.Location]{
+		Field: func(t armsubscriptions.Location) string {
+			return *t.DisplayName
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("selecting new managed cluster location: %w", err)
+	}
+
+	if err := azure.NewCluster(ctx, subscriptionId, resourceGroup, name, *location.Name); err != nil {
+		return "", fmt.Errorf("creating new managed cluster: %w", err)
+	}
+	lgr.Info("created Manage Cluster " + name)
+
+	lgr.Debug("finished getting cluster")
 	return name, nil
 }
 
@@ -244,7 +308,9 @@ func withNew[T any](instantiated []T) []newish[T] {
 
 	ret = append(ret, newish[T]{IsNew: true})
 	for _, inst := range instantiated {
-		ret = append(ret, newish[T]{Data: &inst})
+		func(t T) { // needed for loop variable capture
+			ret = append(ret, newish[T]{Data: &t})
+		}(inst)
 	}
 
 	return ret
@@ -270,4 +336,40 @@ func searchFile(filename string) (string, error) {
 	}
 
 	return ret, nil
+}
+
+func validateResourceGroup(rg string) error {
+	if len(rg) == 0 || len(rg) > 90 {
+		return errors.New("must be between 1 and 90 characters long")
+	}
+
+	if !alphanumUnderscoreParenHyphenPeriodRegex.MatchString(rg) {
+		return errors.New("must contain only alphanumerics, underscores, parentheses, hyphens, and periods")
+	}
+
+	if rg[len(rg)-1:] == "." {
+		return errors.New("cannot end in a period")
+	}
+
+	return nil
+}
+
+func validateCluster(cluster string) error {
+	if len(cluster) == 0 || len(cluster) > 63 {
+		return errors.New("must be between 1 and 63 characters long")
+	}
+
+	if !alphanumUnderscoreHyphenRegex.MatchString(cluster) {
+		return errors.New("must contain only alphanumerics, underscores, and hyphens")
+	}
+
+	if !alphanumRegex.MatchString(cluster[0:1]) {
+		return errors.New("must start with an alphanumeric character")
+	}
+
+	if !alphanumRegex.MatchString(cluster[len(cluster)-1:]) {
+		return errors.New("must end with an alphanumeric character")
+	}
+
+	return nil
 }
