@@ -29,7 +29,7 @@ func Input(label string, opt *InputOpt) (string, error) {
 }
 
 func FileExists(path string) error {
-	_, err := os.Stat(path)
+	info, err := os.Stat(path)
 
 	if errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("file %s doesn't exist", path)
@@ -37,6 +37,10 @@ func FileExists(path string) error {
 
 	if err != nil {
 		return fmt.Errorf("checking if file exists: %w", err)
+	}
+
+	if info.IsDir() {
+		return errors.New("file shouldn't be a directory")
 	}
 
 	return nil

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/authorization/armauthorization/v2"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry"
 	"github.com/azure/spin-aks-plugin/pkg/logger"
 )
@@ -15,12 +17,6 @@ type Role struct {
 }
 
 const (
-<<<<<<< HEAD
-=======
-	// tbarnes94: placeholder for now
-	subscriptionId = "8ecadfc9-d1a3-4ea4-b844-0d9f87e4d7c8"
-
->>>>>>> bbffb72b84a8e2f03fbe48435d2bed7023e97454
 	acrPullRoleName       = "AcrPull"
 	acrPullRoleDefinition = "7f951dda-4ed3-4680-a7ca-43fe172d538d"
 )
@@ -28,11 +24,7 @@ const (
 var (
 	AcrPullRole = Role{
 		Name: acrPullRoleName,
-<<<<<<< HEAD
 		ID:   fmt.Sprintf("/providers/Microsoft.Authorization/roleDefinitions/%s", acrPullRoleDefinition),
-=======
-		ID:   fmt.Sprintf("/subscriptions/%s/providers/Microsoft.Authorization/roleDefinitions/%s", subscriptionId, acrPullRoleDefinition),
->>>>>>> bbffb72b84a8e2f03fbe48435d2bed7023e97454
 	}
 )
 
@@ -79,6 +71,36 @@ func ListContainerRegistries(ctx context.Context, subscriptionId, resourceGroup 
 
 	lgr.Debug("finished listing ACRs")
 	return acrs, nil
+}
+
+func NewContainerRegistry(ctx context.Context, subscriptionId, resourceGroup, name, location string) error {
+	lgr := logger.FromContext(ctx).With("subscription", subscriptionId, "resourceGroup", resourceGroup)
+	ctx = logger.WithContext(ctx, lgr)
+	lgr.Debug("creating new container registry")
+
+	factory, err := acrFactory(subscriptionId)
+	if err != nil {
+		return fmt.Errorf("getting acr factory: %w", err)
+	}
+
+	lgr.Info("creating new Container Registry")
+	poll, err := factory.NewRegistriesClient().BeginCreate(ctx, resourceGroup, name, armcontainerregistry.Registry{
+		Name:     &name,
+		Location: &location,
+		SKU: &armcontainerregistry.SKU{
+			Name: to.Ptr(armcontainerregistry.SKUNameBasic),
+		},
+	}, nil)
+	if err != nil {
+		return fmt.Errorf("starting to create container registry: %w", err)
+	}
+
+	if _, err := poll.PollUntilDone(ctx, nil); err != nil {
+		return fmt.Errorf("creating container registry: %w", err)
+
+	}
+
+	return nil
 }
 
 func CheckACRPullAccess(ctx context.Context, subscriptionId, resourceGroup string) error {

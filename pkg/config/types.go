@@ -43,3 +43,12 @@ type Store struct {
 	Kind storeKind `toml:"kind"`
 	ResourceId
 }
+
+// newish represents a type that can be either instantiated or
+// a new instance is requested. If the IsNew field is true then
+// a new instance is requested. Otherwise, the Data field should be
+// populated with the instance.
+type newish[T any] struct {
+	Data  *T
+	IsNew bool
+}
