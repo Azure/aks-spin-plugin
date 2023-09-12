@@ -113,7 +113,7 @@ func ensureAcr(ctx context.Context) error {
 	if c.ContainerRegistry.ResourceGroup == "" {
 		rg, err := getResourceGroup(ctx, c.ContainerRegistry.Subscription, "Container Registry's")
 		if err != nil {
-			return fmt.Errorf("getting container registry's resource group: %w", err)
+			return fmt.Errorf("getting container registry's resource group")
 		}
 
 		c.ContainerRegistry.ResourceGroup = rg
@@ -178,7 +178,7 @@ func getResourceGroup(ctx context.Context, subscriptionId, possessive string) (s
 	}
 
 	rgsWithNew := withNew(rgs)
-	lgr.Debug(fmt.Sprintf("prompting for %s resource group", possessive))
+	lgr.Debug(fmt.Sprintf("prompting for %s resource group"), possessive)
 	selection, err := prompt.Select(fmt.Sprintf("Select your %s Resource Group", possessive), rgsWithNew, &prompt.SelectOpt[newish[armresources.ResourceGroup]]{
 		Field: func(t newish[armresources.ResourceGroup]) string {
 			if t.IsNew {
@@ -197,9 +197,7 @@ func getResourceGroup(ctx context.Context, subscriptionId, possessive string) (s
 		return *selection.Data.Name, nil
 	}
 
-	name, err := prompt.Input("Input your new Resource Group name", &prompt.InputOpt{
-		Validate: validateResourceGroup,
-	})
+	name, err := prompt.Input("Input your new Resource Group name", &prompt.InputOpt{})
 	if err != nil {
 		return "", fmt.Errorf("inputting new resource group name: %w", err)
 	}
@@ -221,139 +219,8 @@ func getResourceGroup(ctx context.Context, subscriptionId, possessive string) (s
 	if err := azure.NewResourceGroup(ctx, subscriptionId, name, *location.Name); err != nil {
 		return "", fmt.Errorf("creating new resource group: %w", err)
 	}
-	lgr.Info("created Resource Group " + name)
 
 	lgr.Debug(fmt.Sprintf("finished getting %s resource group", possessive))
-	return name, nil
-}
-
-func getCluster(ctx context.Context, subscriptionId, resourceGroup string) (string, error) {
-	lgr := logger.FromContext(ctx)
-	lgr.Debug("starting to get cluster")
-
-	if subscriptionId == "" {
-		return "", errors.New("subscriptionId is  empty")
-	}
-	if resourceGroup == "" {
-		return "", errors.New("resourceGroup is empty")
-	}
-
-	clusters, err := azure.ListClusters(ctx, c.Cluster.Subscription, c.Cluster.ResourceGroup)
-	if err != nil {
-		return "", fmt.Errorf("listing clusters: %w", err)
-	}
-
-	clustersWithNew := withNew(clusters)
-	selection, err := prompt.Select("Select your Cluster", clustersWithNew, &prompt.SelectOpt[newish[armcontainerservice.ManagedCluster]]{
-		Field: func(t newish[armcontainerservice.ManagedCluster]) string {
-			if t.IsNew {
-				return "New Managed Cluster"
-			}
-
-			return *t.Data.Name
-		},
-	})
-	if err != nil {
-		return "", fmt.Errorf("selecting cluster: %w", err)
-	}
-
-	if !selection.IsNew {
-		lgr.Debug("finished getting cluster")
-		return *selection.Data.Name, nil
-	}
-
-	name, err := prompt.Input("Input your new Managed Cluster name", &prompt.InputOpt{
-		Validate: validateCluster,
-	})
-	if err != nil {
-		return "", fmt.Errorf("inputting new managed cluster name: %w", err)
-	}
-
-	locations, err := azure.ListLocations(ctx, subscriptionId)
-	if err != nil {
-		return "", fmt.Errorf("listing locations: %w", err)
-	}
-
-	location, err := prompt.Select("Input your new Managed Cluster location", locations, &prompt.SelectOpt[armsubscriptions.Location]{
-		Field: func(t armsubscriptions.Location) string {
-			return *t.DisplayName
-		},
-	})
-	if err != nil {
-		return "", fmt.Errorf("selecting new managed cluster location: %w", err)
-	}
-
-	if err := azure.NewCluster(ctx, subscriptionId, resourceGroup, name, *location.Name); err != nil {
-		return "", fmt.Errorf("creating new managed cluster: %w", err)
-	}
-	lgr.Info("created Managed Cluster " + name)
-
-	lgr.Debug("finished getting cluster")
-	return name, nil
-}
-
-func getContainerRegistry(ctx context.Context, subscriptionId, resourceGroup string) (string, error) {
-	lgr := logger.FromContext(ctx)
-	lgr.Debug("starting to get container registry")
-
-	if subscriptionId == "" {
-		return "", errors.New("subscriptionId is empty")
-	}
-	if resourceGroup == "" {
-		return "", errors.New("resourceGroup is empty")
-	}
-
-	acrs, err := azure.ListContainerRegistries(ctx, c.ContainerRegistry.Subscription, c.ContainerRegistry.ResourceGroup)
-	if err != nil {
-		return "", fmt.Errorf("listing acrs: %w", err)
-	}
-
-	acrsWithNew := withNew(acrs)
-	selection, err := prompt.Select("Select your Container Registry", acrsWithNew, &prompt.SelectOpt[newish[armcontainerregistry.Registry]]{
-		Field: func(t newish[armcontainerregistry.Registry]) string {
-			if t.IsNew {
-				return "New Container Registry"
-			}
-
-			return *t.Data.Name
-		},
-	})
-	if err != nil {
-		return "", fmt.Errorf("selecting container registry: %w", err)
-	}
-
-	if !selection.IsNew {
-		lgr.Debug("finished getting container registry")
-		return *selection.Data.Name, nil
-	}
-
-	name, err := prompt.Input("Input your new Container Registry name", &prompt.InputOpt{
-		Validate: validateContainerRegistry,
-	})
-	if err != nil {
-		return "", fmt.Errorf("inputting new container registry name: %w", err)
-	}
-
-	locations, err := azure.ListLocations(ctx, subscriptionId)
-	if err != nil {
-		return "", fmt.Errorf("listing locations: %w", err)
-	}
-
-	location, err := prompt.Select("Input your new Container Registry location", locations, &prompt.SelectOpt[armsubscriptions.Location]{
-		Field: func(t armsubscriptions.Location) string {
-			return *t.DisplayName
-		},
-	})
-	if err != nil {
-		return "", fmt.Errorf("selecting new container registry location: %w", err)
-	}
-
-	if err := azure.NewContainerRegistry(ctx, subscriptionId, resourceGroup, name, *location.Name); err != nil {
-		return "", fmt.Errorf("creating new container registry: %w", err)
-	}
-	lgr.Info("created Container Registry " + name)
-
-	lgr.Debug("finished getting container registry")
 	return name, nil
 }
 
@@ -362,9 +229,7 @@ func withNew[T any](instantiated []T) []newish[T] {
 
 	ret = append(ret, newish[T]{IsNew: true})
 	for _, inst := range instantiated {
-		func(t T) { // needed for loop variable capture
-			ret = append(ret, newish[T]{Data: &t})
-		}(inst)
+		ret = append(ret, newish[T]{Data: &inst})
 	}
 
 	return ret
