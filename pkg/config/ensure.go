@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v2"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armsubscriptions"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/subscription/armsubscription"
 	"github.com/azure/spin-aks-plugin/pkg/azure"
 	"github.com/azure/spin-aks-plugin/pkg/logger"
@@ -56,23 +58,12 @@ func ensureCluster(ctx context.Context) error {
 	}
 
 	if c.Cluster.ResourceGroup == "" {
-		rgs, err := azure.ListResourceGroups(ctx, c.Cluster.Subscription)
+		rg, err := getResourceGroup(ctx, c.Cluster.Subscription, "Cluster's")
 		if err != nil {
-			return fmt.Errorf("listing resource groups: %w", err)
+			return fmt.Errorf("getting cluster resource group: %w", err)
 		}
 
-		lgr.Debug("prompting for cluster resource group")
-		rg, err := prompt.Select("Select your Cluster's Resource Group", rgs, &prompt.SelectOpt[armresources.ResourceGroup]{
-			Field: func(t armresources.ResourceGroup) string {
-				return *t.Name
-			},
-		})
-		if err != nil {
-			return fmt.Errorf("selecting resource group: %w", err)
-		}
-
-		c.Cluster.ResourceGroup = *rg.Name
-		lgr.Debug("finished prompting for cluster resource group")
+		c.Cluster.ResourceGroup = rg
 	}
 
 	if c.Cluster.Name == "" {
@@ -124,23 +115,12 @@ func ensureAcr(ctx context.Context) error {
 	}
 
 	if c.ContainerRegistry.ResourceGroup == "" {
-		rgs, err := azure.ListResourceGroups(ctx, c.ContainerRegistry.Subscription)
+		rg, err := getResourceGroup(ctx, c.ContainerRegistry.Subscription, "Container Registry's")
 		if err != nil {
-			return fmt.Errorf("listing resource groups: %w", err)
+			return fmt.Errorf("getting container registry's resource group")
 		}
 
-		lgr.Debug("prompting for acr resource group")
-		rg, err := prompt.Select("Select your Container Registry's Resource Group", rgs, &prompt.SelectOpt[armresources.ResourceGroup]{
-			Field: func(t armresources.ResourceGroup) string {
-				return *t.Name
-			},
-		})
-		if err != nil {
-			return fmt.Errorf("selecting resource group: %w", err)
-		}
-
-		c.ContainerRegistry.ResourceGroup = *rg.Name
-		lgr.Debug("finished prompting for cluster resource group")
+		c.ContainerRegistry.ResourceGroup = rg
 	}
 
 	if c.ContainerRegistry.Name == "" {
@@ -194,6 +174,80 @@ func ensureSpinManifest(ctx context.Context) error {
 
 	lgr.Debug("done ensuring spin manifest")
 	return nil
+}
+
+// getResourceGroup goes through steps of prompting user for a resource group. Possessive is the possessive
+// form of what the resource group would be used for. For example "Cluster's" would be passed in as possessive
+// if we are getting the resource group for the cluster
+func getResourceGroup(ctx context.Context, subscriptionId, possessive string) (string, error) {
+	lgr := logger.FromContext(ctx)
+	lgr.Debug(fmt.Sprintf("starting to get %s resource group", possessive))
+
+	if subscriptionId == "" {
+		return "", errors.New("subscriptionId is empty")
+	}
+
+	rgs, err := azure.ListResourceGroups(ctx, subscriptionId)
+	if err != nil {
+		return "", fmt.Errorf("listing resource groups: %w", err)
+	}
+
+	rgsWithNew := withNew(rgs)
+	lgr.Debug(fmt.Sprintf("prompting for %s resource group"), possessive)
+	selection, err := prompt.Select(fmt.Sprintf("Select your %s Resource Group", possessive), rgsWithNew, &prompt.SelectOpt[newish[armresources.ResourceGroup]]{
+		Field: func(t newish[armresources.ResourceGroup]) string {
+			if t.IsNew {
+				return "New Resource Group"
+			}
+
+			return *t.Data.Name
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("prompting for resource group: %w", err)
+	}
+
+	if !selection.IsNew {
+		lgr.Debug(fmt.Sprintf("finished getting %s resource group", possessive))
+		return *selection.Data.Name, nil
+	}
+
+	name, err := prompt.Input("Input your new Resource Group name", &prompt.InputOpt{})
+	if err != nil {
+		return "", fmt.Errorf("inputting new resource group name: %w", err)
+	}
+
+	locations, err := azure.ListLocations(ctx, subscriptionId)
+	if err != nil {
+		return "", fmt.Errorf("listing locations: %w", err)
+	}
+
+	location, err := prompt.Select("Input your new Resource Group location", locations, &prompt.SelectOpt[armsubscriptions.Location]{
+		Field: func(t armsubscriptions.Location) string {
+			return *t.DisplayName
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("selecting new resource group location: %w", err)
+	}
+
+	if err := azure.NewResourceGroup(ctx, subscriptionId, name, *location.Name); err != nil {
+		return "", fmt.Errorf("creating new resource group: %w", err)
+	}
+
+	lgr.Debug(fmt.Sprintf("finished getting %s resource group", possessive))
+	return name, nil
+}
+
+func withNew[T any](instantiated []T) []newish[T] {
+	ret := make([]newish[T], 0, len(instantiated)+1)
+
+	ret = append(ret, newish[T]{IsNew: true})
+	for _, inst := range instantiated {
+		ret = append(ret, newish[T]{Data: &inst})
+	}
+
+	return ret
 }
 
 // searchFile searches for the file inside the current path and recursively searches directories.
