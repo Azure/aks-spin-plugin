@@ -12,6 +12,11 @@ import (
 	"github.com/azure/spin-aks-plugin/pkg/logger"
 )
 
+const (
+	acrPullRoleId         = "7f951dda-4ed3-4680-a7ca-43fe172d538d"
+	acrResourceIdTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ContainerRegistry/registries/%s"
+)
+
 func aksFactory(subscriptionId string) (*armcontainerservice.ClientFactory, error) {
 	cred, err := getCred()
 	if err != nil {
@@ -55,6 +60,54 @@ func ListClusters(ctx context.Context, subscriptionId, resourceGroup string) ([]
 
 	lgr.Debug("finished listing AKS clusters")
 	return clusters, nil
+}
+
+func LinkAcr(ctx context.Context, subscriptionId, clusterResourceGroup, clusterName, acrResourceGroup, acrName string) error {
+	lgr := logger.FromContext(ctx).With("subscription", subscriptionId, "resource group", clusterResourceGroup, "acr name", acrName)
+	ctx = logger.WithContext(ctx, lgr)
+	lgr.Debug("linking ACR")
+
+	// add validation for acr?
+
+	client, err := aksFactory(subscriptionId)
+	if err != nil {
+		return fmt.Errorf("getting aks client: %w", err)
+	}
+
+	lgr.Debug("getting cluster information")
+	cluster, err := client.NewManagedClustersClient().Get(ctx, clusterResourceGroup, clusterName, nil)
+
+	if err != nil {
+		return fmt.Errorf("getting cluster information: %w", err)
+	}
+	//armcontainerservice.ResourceIdentityTypeNone is what's used when there's a serviceprinciple - otherwise it's either system or user assigned
+	if *cluster.Identity.Type == armcontainerservice.ResourceIdentityTypeSystemAssigned || *cluster.Identity.Type == armcontainerservice.ResourceIdentityTypeUserAssigned {
+		lgr.Debug("detected MSI enabled cluster")
+
+		// https://github.com/Azure/azure-cli/blob/8f91d71e8c3af9ab10024e12c51a0dab573df9f2/src/azure-cli/azure/cli/command_modules/acs/managed_cluster_decorator.py#L6177
+		msiInfo, ok := cluster.Identity.UserAssignedIdentities["kubeletidentity"]
+		if !ok {
+			return errors.New("missing kubeletidentity on MSI cluster")
+		}
+		objId := msiInfo.PrincipalID
+		if objId == nil {
+			return errors.New("missing principal id on MSI cluster")
+		}
+
+		raClient, err := createRoleAssignmentClient(subscriptionId)
+		if err != nil {
+			return fmt.Errorf("creating role assignment client: %w", err)
+		}
+
+		scope := fmt.Sprintf(acrResourceIdTemplate, subscriptionId, acrResourceGroup, acrName)
+
+		err = raClient.createRoleAssignment(ctx, *objId, acrPullRoleId, scope, "acrpull")
+
+		return err
+	}
+
+	// otherwise serviceprincipal cluster
+	return nil
 }
 
 func NewCluster(ctx context.Context, subscriptionId, resourceGroup, name, location string) error {
