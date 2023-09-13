@@ -101,6 +101,28 @@ func NewCluster(ctx context.Context, subscriptionId, resourceGroup, name, locati
 	return nil
 }
 
+func PutCluster(ctx context.Context, subscriptionId, resourceGroup string, mc *armcontainerservice.ManagedCluster) error {
+	lgr := logger.FromContext(ctx).With("subscription", subscriptionId, "resource group", resourceGroup, "cluster", mc)
+	ctx = logger.WithContext(ctx, lgr)
+	lgr.Debug("putting AKS cluster")
+
+	client, err := aksFactory(subscriptionId)
+	if err != nil {
+		return fmt.Errorf("getting aks client: %w", err)
+	}
+
+	poll, err := client.NewManagedClustersClient().BeginCreateOrUpdate(ctx, resourceGroup, *mc.Name, *mc, nil)
+	if err != nil {
+		return fmt.Errorf("starting to pull cluster: %w", err)
+	}
+
+	if _, err := pollWithLog(ctx, poll, "still putting new managed cluster"); err != nil {
+		return fmt.Errorf("putting cluster: %w", err)
+	}
+
+	return nil
+}
+
 func pollWithLog[T any](ctx context.Context, p *runtime.Poller[T], msg string) (T, error) {
 	lgr := logger.FromContext(ctx)
 
