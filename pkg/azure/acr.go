@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/authorization/armauthorization/v2"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/authorization/armauthorization/v2"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry"
 	"github.com/azure/spin-aks-plugin/pkg/logger"
 )
@@ -103,14 +103,31 @@ func NewContainerRegistry(ctx context.Context, subscriptionId, resourceGroup, na
 	return nil
 }
 
-func CheckACRPullAccess(ctx context.Context, subscriptionId, resourceGroup string) error {
+func CheckACRPullAccess(ctx context.Context, subscriptionId, resourceGroup, registryName, kubeletId string) error {
+	lgr := logger.FromContext(ctx).With("subscription", subscriptionId, "resource group", resourceGroup, "registry", registryName)
+	ctx = logger.WithContext(ctx, lgr)
+	lgr.Debug("checking cluster's acr pull access")
+
 	roles, err := ListRoleAssignments(ctx, subscriptionId, resourceGroup)
 	if err != nil {
 		return fmt.Errorf("listing role assignments: %w", err)
 	}
+
+	// retrieve specific registry by name
+	client, err := acrFactory(subscriptionId)
+	acr, err := client.NewRegistriesClient().Get(ctx, resourceGroup, registryName, nil)
+	if err != nil {
+		return fmt.Errorf("get acr by name: %w", err)
+	}
+
+	scope := acr.ID
 	for _, role := range roles {
-		if (*role.Name == AcrPullRole.Name) && (*role.ID == AcrPullRole.ID) {
+		if (*role.Name == AcrPullRole.Name) && (*role.ID == AcrPullRole.ID) && (*scope == *role.Properties.Scope) && (kubeletId == *role.Properties.PrincipalID) {
 			// tbarnes94: success case
+			// checking that cluster has permissions to pull from acr
+			// matching up the mc's kubelet id (principalId) to the role's principalId (role.Properties.PrincipalID)
+			// matching up the scope from the role (role.Properties.Scope) to the scope in the acr (registry id)
+
 			return nil
 		}
 	}
