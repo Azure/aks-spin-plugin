@@ -15,7 +15,7 @@ import (
 	"github.com/azure/spin-aks-plugin/pkg/logger"
 )
 
-type akv struct {
+type Akv struct {
 	uri            string
 	id             string
 	tenantId       string
@@ -31,8 +31,8 @@ type Cert struct {
 	name string
 }
 
-func LoadAkv(id arm.ResourceID) *akv {
-	return &akv{
+func LoadAkv(id arm.ResourceID) *Akv {
+	return &Akv{
 		id:             id.String(),
 		name:           id.Name,
 		resourceGroup:  id.ResourceGroupName,
@@ -40,7 +40,40 @@ func LoadAkv(id arm.ResourceID) *akv {
 	}
 }
 
-func ListKeyVaults(ctx context.Context, subscriptionId, resourceGroup string) ([]akv, error) {
+func GetKeyVault(ctx context.Context, subscriptionId, resourceGroup, name string) (*Akv, error) {
+	lgr := logger.FromContext(ctx).With("name", name, "resourceGroup", resourceGroup, "subscriptionId", subscriptionId)
+	ctx = logger.WithContext(ctx, lgr)
+	lgr.Info("starting to get keyvault")
+	defer lgr.Info("finished getting keyvault")
+
+	cred, err := getCred()
+	if err != nil {
+		return nil, fmt.Errorf("getting az credentials: %w", err)
+	}
+
+	vaultsClient, err := armkeyvault.NewVaultsClient(subscriptionId, cred, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating client: %w", err)
+	}
+	
+	resp, err := vaultsClient.Get(ctx, resourceGroup, name, nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting keyvault: %w", err)
+	}
+	kv := resp.Vault
+
+	id := resp.Vault.ID
+	kvId, err := arm.ParseResourceID(*id)
+	if err != nil {
+		return nil, fmt.Errorf("parsing resource id: %w", err)
+	}
+	newAkv := LoadAkv(*kvId)
+	newAkv.uri = *kv.Properties.VaultURI
+
+	return newAkv, nil
+}
+
+func ListKeyVaults(ctx context.Context, subscriptionId, resourceGroup string) ([]Akv, error) {
 	lgr := logger.FromContext(ctx).With("resourceGroup", resourceGroup, "subscriptionId", subscriptionId)
 	ctx = logger.WithContext(ctx, lgr)
 	lgr.Info("starting to list keyvaults")
@@ -57,7 +90,7 @@ func ListKeyVaults(ctx context.Context, subscriptionId, resourceGroup string) ([
 	}
 
 	pager := client.NewListByResourceGroupPager(resourceGroup, nil)
-	var akvs []akv
+	var akvs []Akv
 	for pager.More() {
 		page, err := pager.NextPage(ctx)
 		if err != nil {
@@ -84,7 +117,7 @@ func ListKeyVaults(ctx context.Context, subscriptionId, resourceGroup string) ([
 }
 
 
-func NewAkv(ctx context.Context, tenantId, subscriptionId, resourceGroup, name, location string) (*akv, error) {
+func NewAkv(ctx context.Context, tenantId, subscriptionId, resourceGroup, name, location string) (*Akv, error) {
 	name = truncate(name, 24)
 
 	lgr := logger.FromContext(ctx).With("name", name, "resourceGroup", resourceGroup, "location", location, "subscriptionId", subscriptionId)
@@ -138,7 +171,7 @@ func NewAkv(ctx context.Context, tenantId, subscriptionId, resourceGroup, name, 
 		return nil, fmt.Errorf("waiting for vault creation to complete: %w", err)
 	}
 
-	return &akv{
+	return &Akv{
 		uri:            *result.Properties.VaultURI,
 		id:             *result.ID,
 		resourceGroup:  resourceGroup,
@@ -148,7 +181,7 @@ func NewAkv(ctx context.Context, tenantId, subscriptionId, resourceGroup, name, 
 	}, nil
 }
 
-func (a *akv) PutSecret(ctx context.Context, name, value string) error {
+func (a *Akv) PutSecret(ctx context.Context, name, value string) error {
 	lgr := logger.FromContext(ctx).With("name", name, "resourceGroup", a.resourceGroup, "subscriptionId", a.subscriptionId)
 	ctx = logger.WithContext(ctx, lgr)
 	lgr.Info("starting to put secret")
@@ -164,6 +197,7 @@ func (a *akv) PutSecret(ctx context.Context, name, value string) error {
 		return fmt.Errorf("creating client: %w", err)
 	}
 
+	//TODO add some validation for access check so we can validate access when selecting the keyvault
 	resp,err := secretClient.GetSecret(ctx,name,"",&azsecrets.GetSecretOptions{})
 	if err != nil {
 		var respErr *azcore.ResponseError
@@ -195,11 +229,11 @@ func (a *akv) PutSecret(ctx context.Context, name, value string) error {
 }
 
 
-func (a *akv) GetId() string {
+func (a *Akv) GetId() string {
 	return a.id
 }
 
-func (a *akv) AddAccessPolicy(ctx context.Context, objectId string, permissions armkeyvault.Permissions) error {
+func (a *Akv) AddAccessPolicy(ctx context.Context, objectId string, permissions armkeyvault.Permissions) error {
 	lgr := logger.FromContext(ctx).With("objectId", objectId, "name", a.name, "resourceGroup", a.resourceGroup, "subscriptionId", a.subscriptionId)
 	ctx = logger.WithContext(ctx, lgr)
 	lgr.Info("starting to add access policy")
@@ -237,84 +271,6 @@ func LoadCert(name string) *Cert {
 	return &Cert{
 		name: name,
 	}
-}
-
-func (a *akv) CreateCertificate(ctx context.Context, name string, dnsnames []string, certOpts ...CertOpt) (*Cert, error) {
-	lgr := logger.FromContext(ctx).With("name", name, "dnsnames", dnsnames, "resourceGroup", a.resourceGroup, "subscriptionId", a.subscriptionId)
-	ctx = logger.WithContext(ctx, lgr)
-	lgr.Info("starting to create certificate")
-	defer lgr.Info("finished creating certificate")
-
-	cred, err := getCred()
-	if err != nil {
-		return nil, fmt.Errorf("getting az credentials: %w", err)
-	}
-
-	client, err := azcertificates.NewClient(a.uri, cred, nil)
-	if err != nil {
-		return nil, fmt.Errorf("creating client: %w", err)
-	}
-
-	dnsnamesPtr := to.SliceOfPtrs[string](dnsnames...)
-	c := &azcertificates.CreateCertificateParameters{
-		CertificateAttributes: nil,
-		CertificatePolicy: &azcertificates.CertificatePolicy{
-			Attributes: nil,
-			IssuerParameters: &azcertificates.IssuerParameters{
-				Name: to.Ptr("Self"),
-			},
-			KeyProperties: &azcertificates.KeyProperties{
-				Exportable: to.Ptr(true),
-				KeySize:    to.Ptr(int32(2048)),
-				KeyType:    to.Ptr(azcertificates.KeyTypeRSA),
-				ReuseKey:   to.Ptr(true),
-			},
-			LifetimeActions: []*azcertificates.LifetimeAction{
-				{
-					Action: &azcertificates.LifetimeActionType{
-						ActionType: to.Ptr(azcertificates.CertificatePolicyActionAutoRenew),
-					},
-					Trigger: &azcertificates.LifetimeActionTrigger{
-						DaysBeforeExpiry: to.Ptr(int32(30)),
-					},
-				},
-			},
-			SecretProperties: &azcertificates.SecretProperties{
-				ContentType: to.Ptr("application/x-pem-file"),
-			},
-			X509CertificateProperties: &azcertificates.X509CertificateProperties{
-				KeyUsage: []*azcertificates.KeyUsageType{
-					to.Ptr(azcertificates.KeyUsageTypeCRLSign),
-					to.Ptr(azcertificates.KeyUsageTypeDataEncipherment),
-					to.Ptr(azcertificates.KeyUsageTypeDigitalSignature),
-					to.Ptr(azcertificates.KeyUsageTypeKeyAgreement),
-					to.Ptr(azcertificates.KeyUsageTypeKeyCertSign),
-					to.Ptr(azcertificates.KeyUsageTypeKeyEncipherment),
-				},
-				Subject: to.Ptr("CN=testcert"),
-				SubjectAlternativeNames: &azcertificates.SubjectAlternativeNames{
-					DNSNames: dnsnamesPtr,
-				},
-				ValidityInMonths: to.Ptr(int32(12)),
-			},
-			ID: nil,
-		},
-		Tags: nil,
-	}
-	for _, opt := range certOpts {
-		if err := opt(c); err != nil {
-			return nil, fmt.Errorf("applying certificate option: %w", err)
-		}
-	}
-
-	_, err = client.CreateCertificate(ctx, name, *c, nil)
-	if err != nil {
-		return nil, fmt.Errorf("creating certificate: %w", err)
-	}
-
-	return &Cert{
-		name: name,
-	}, nil
 }
 
 func (c *Cert) GetName() string {
