@@ -85,11 +85,18 @@ func NewContainerRegistry(ctx context.Context, subscriptionId, resourceGroup, na
 	return nil
 }
 
-// tbarnes94: will assume we have mc since it's a param for now
 func enableKeyvaultCSIDriver(ctx context.Context, subscriptionId, resourceGroup string, mc *armcontainerservice.ManagedCluster) error {
 	lgr := logger.FromContext(ctx).With("cluster", mc)
 	ctx = logger.WithContext(ctx, lgr)
 	lgr.Debug("enabling keyvault CSI driver for cluster")
+
+	if mc == nil {
+		return errors.New("managed cluster cannot be nil to install keyvault csi driver")
+	}
+
+	if mc.Properties == nil {
+		mc.Properties = &armcontainerservice.ManagedClusterProperties{}
+	}
 
 	if mc.Properties.AddonProfiles != nil {
 		mc.Properties.AddonProfiles["azureKeyvaultSecretsProvider"] = &armcontainerservice.ManagedClusterAddonProfile{
