@@ -103,7 +103,7 @@ func NewContainerRegistry(ctx context.Context, subscriptionId, resourceGroup, na
 	return nil
 }
 
-func CheckACRPullAccess(ctx context.Context, subscriptionId, resourceGroup, registryName, kubeletId string) error {
+func CheckACRPullAccess(ctx context.Context, subscriptionId, resourceGroup, registryName, clusterName string) error {
 	lgr := logger.FromContext(ctx).With("subscription", subscriptionId, "resource group", resourceGroup, "registry", registryName)
 	ctx = logger.WithContext(ctx, lgr)
 	lgr.Debug("checking cluster's acr pull access")
@@ -120,9 +120,16 @@ func CheckACRPullAccess(ctx context.Context, subscriptionId, resourceGroup, regi
 		return fmt.Errorf("get acr by name: %w", err)
 	}
 
+	// retrieve specific cluster by name
+	mc, err := GetCluster(ctx, subscriptionId, resourceGroup, clusterName)
+	if err != nil {
+		return fmt.Errorf("get mc by name: %w", err)
+	}
+
 	scope := acr.ID
+	kubeletId := mc.Identity.PrincipalID
 	for _, role := range roles {
-		if (*role.Name == AcrPullRole.Name) && (*role.ID == AcrPullRole.ID) && (*scope == *role.Properties.Scope) && (kubeletId == *role.Properties.PrincipalID) {
+		if (*role.Name == AcrPullRole.Name) && (*role.ID == AcrPullRole.ID) && (*scope == *role.Properties.Scope) && (*kubeletId == *role.Properties.PrincipalID) {
 			// tbarnes94: success case
 			// checking that cluster has permissions to pull from acr
 			// matching up the mc's kubelet id (principalId) to the role's principalId (role.Properties.PrincipalID)
