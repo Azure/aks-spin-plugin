@@ -1,0 +1,18 @@
+apiVersion: [networking.k8s.io/v1](http://networking.k8s.io/v1)
+kind: Ingress
+metadata:
+  name: test
+  annotations:
+    [ingress.kubernetes.io/ssl-redirect:](http://ingress.kubernetes.io/ssl-redirect:) "false"
+      [kubernetes.io/ingress.class:](http://kubernetes.io/ingress.class:) traefik
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: test
+                port:
+                  number: 80
