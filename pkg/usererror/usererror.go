@@ -1,4 +1,4 @@
-// Package usererror provides an error type that wraps both the orgiginal error and a
+// Package usererror provides an error type that wraps both the original error and a
 // more "user-friendly" message that details a common user-error and the fix
 package usererror
 
