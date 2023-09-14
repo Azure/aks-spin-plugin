@@ -23,8 +23,8 @@ var (
 func init() {
 	addOverrideFlag(dockerfileCmd)
 	addOverrideFlag(k8sCmd)
-	dockerfileCmd.Flags().StringVarP(&dockerDest, "dest", "d", "./Dockerfile", "destination file path")
-	k8sCmd.Flags().StringVarP(&k8sDest, "dest", "d", "./manifests", "destination directory")
+	dockerfileCmd.Flags().StringVarP(&dockerDest, "dest", "d", "./Dockerfile", "destination Dockerfile path")
+	k8sCmd.Flags().StringVarP(&k8sDest, "dest", "d", "./manifests/manifests.yaml", "destination yaml file path")
 
 	scaffoldCmd.AddCommand(dockerfileCmd)
 	scaffoldCmd.AddCommand(k8sCmd)
@@ -144,8 +144,51 @@ var k8sCmd = &cobra.Command{
 	Long:  "Creates Kubernetes manifests required to run your application on AKS",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		lgr := logger.FromContext(cmd.Context())
-		lgr.Info("hello")
+		lgr.Info("starting k8s command")
 
+		spinManifest := config.Get().SpinManifest
+		if spinManifest == "" {
+			return usererror.New(errors.New("spin manifest not set in config"), "Spin manifest not set in config. Try running `spin aks init`.")
+		}
+
+		manifest, err := spin.Load(spinManifest)
+		if err != nil {
+			return fmt.Errorf("loading spin manifest: %w", err)
+		}
+
+		name := manifest.Name
+		if name == "" {
+			return usererror.New(errors.New("name not set in spin manifest"), "Name not set in spin manifest. Add a name to your spin manifest and try again.")
+		}
+
+		manifests, err := generate.Manifests(name, "placeholderimagefornow:latest")
+		if err != nil {
+			return fmt.Errorf("generating manifests: %w", err)
+		}
+
+		if _, err := os.Stat(k8sDest); err == nil && !override {
+			return usererror.New(
+				errors.New("file exists"),
+				fmt.Sprintf("File %s already exists. Use --override to overwrite.", k8sDest),
+			)
+		}
+
+		if err := os.MkdirAll(filepath.Dir(k8sDest), 0755); err != nil {
+			return fmt.Errorf("creating directory: %w", err)
+		}
+
+		f, err := os.OpenFile(k8sDest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err != nil {
+			return fmt.Errorf("opening file: %w", err)
+		}
+		defer f.Close()
+
+		if _, err := f.Write(manifests); err != nil {
+			return fmt.Errorf("writing file: %w", err)
+		}
+
+		lgr.Info("Kubernetes manifests written to " + k8sDest)
+		lgr.Info("finished k8s command")
 		return nil
 	},
 }
