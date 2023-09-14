@@ -16,12 +16,12 @@ import (
 )
 
 type Akv struct {
-	uri            string
-	id             string
-	tenantId       string
-	subscriptionId string
-	resourceGroup  string
-	name           string
+	Uri            string
+	Id             string
+	TenantId       string
+	SubscriptionId string
+	ResourceGroup  string
+	Name           string
 }
 
 // CertOpt specifies what kind of certificate to create
@@ -33,10 +33,10 @@ type Cert struct {
 
 func LoadAkv(id arm.ResourceID) *Akv {
 	return &Akv{
-		id:             id.String(),
-		name:           id.Name,
-		resourceGroup:  id.ResourceGroupName,
-		subscriptionId: id.SubscriptionID,
+		Id:             id.String(),
+		Name:           id.Name,
+		ResourceGroup:  id.ResourceGroupName,
+		SubscriptionId: id.SubscriptionID,
 	}
 }
 
@@ -68,7 +68,7 @@ func GetKeyVault(ctx context.Context, subscriptionId, resourceGroup, name string
 		return nil, fmt.Errorf("parsing resource id: %w", err)
 	}
 	newAkv := LoadAkv(*kvId)
-	newAkv.uri = *kv.Properties.VaultURI
+	newAkv.Uri = *kv.Properties.VaultURI
 
 	return newAkv, nil
 }
@@ -107,7 +107,7 @@ func ListKeyVaults(ctx context.Context, subscriptionId, resourceGroup string) ([
 				return nil, fmt.Errorf("parsing resource id: %w", err)
 			}
 			newAkv := LoadAkv(*id)
-			newAkv.uri = *kv.Properties.VaultURI
+			newAkv.Uri = *kv.Properties.VaultURI
 
 			akvs = append(akvs, *newAkv)
 			lgr.Info("keyvault", "name", kv.Name)
@@ -172,17 +172,17 @@ func NewAkv(ctx context.Context, tenantId, subscriptionId, resourceGroup, name, 
 	}
 
 	return &Akv{
-		uri:            *result.Properties.VaultURI,
-		id:             *result.ID,
-		resourceGroup:  resourceGroup,
-		name:           *result.Name,
-		subscriptionId: subscriptionId,
-		tenantId:       tenantId,
+		Uri:            *result.Properties.VaultURI,
+		Id:             *result.ID,
+		ResourceGroup:  resourceGroup,
+		Name:           *result.Name,
+		SubscriptionId: subscriptionId,
+		TenantId:       tenantId,
 	}, nil
 }
 
 func (a *Akv) PutSecret(ctx context.Context, name, value string) error {
-	lgr := logger.FromContext(ctx).With("name", name, "resourceGroup", a.resourceGroup, "subscriptionId", a.subscriptionId)
+	lgr := logger.FromContext(ctx).With("name", name, "resourceGroup", a.ResourceGroup, "subscriptionId", a.SubscriptionId)
 	ctx = logger.WithContext(ctx, lgr)
 	lgr.Info("starting to put secret")
 	defer lgr.Info("finished putting secret")
@@ -192,7 +192,7 @@ func (a *Akv) PutSecret(ctx context.Context, name, value string) error {
 		return fmt.Errorf("getting az credentials: %w", err)
 	}
 
-	secretClient, err := azsecrets.NewClient(a.uri, cred, nil)
+	secretClient, err := azsecrets.NewClient(a.Uri, cred, nil)
 	if err != nil {
 		return fmt.Errorf("creating client: %w", err)
 	}
@@ -230,11 +230,11 @@ func (a *Akv) PutSecret(ctx context.Context, name, value string) error {
 
 
 func (a *Akv) GetId() string {
-	return a.id
+	return a.Id
 }
 
 func (a *Akv) AddAccessPolicy(ctx context.Context, objectId string, permissions armkeyvault.Permissions) error {
-	lgr := logger.FromContext(ctx).With("objectId", objectId, "name", a.name, "resourceGroup", a.resourceGroup, "subscriptionId", a.subscriptionId)
+	lgr := logger.FromContext(ctx).With("objectId", objectId, "name", a.Name, "resourceGroup", a.ResourceGroup, "subscriptionId", a.SubscriptionId)
 	ctx = logger.WithContext(ctx, lgr)
 	lgr.Info("starting to add access policy")
 	defer lgr.Info("finished adding access policy")
@@ -244,7 +244,7 @@ func (a *Akv) AddAccessPolicy(ctx context.Context, objectId string, permissions 
 		return fmt.Errorf("getting az credentials: %w", err)
 	}
 
-	client, err := armkeyvault.NewVaultsClient(a.subscriptionId, cred, nil)
+	client, err := armkeyvault.NewVaultsClient(a.SubscriptionId, cred, nil)
 	if err != nil {
 		return fmt.Errorf("creating client: %w", err)
 	}
@@ -253,14 +253,14 @@ func (a *Akv) AddAccessPolicy(ctx context.Context, objectId string, permissions 
 		Properties: &armkeyvault.VaultAccessPolicyProperties{
 			AccessPolicies: []*armkeyvault.AccessPolicyEntry{
 				{
-					TenantID:    to.Ptr(a.tenantId),
+					TenantID:    to.Ptr(a.TenantId),
 					ObjectID:    to.Ptr(objectId),
 					Permissions: &permissions,
 				},
 			},
 		},
 	}
-	if _, err := client.UpdateAccessPolicy(ctx, a.resourceGroup, a.name, armkeyvault.AccessPolicyUpdateKindAdd, addition, nil); err != nil {
+	if _, err := client.UpdateAccessPolicy(ctx, a.ResourceGroup, a.Name, armkeyvault.AccessPolicyUpdateKindAdd, addition, nil); err != nil {
 		return fmt.Errorf("adding access policy: %w", err)
 	}
 

@@ -16,6 +16,7 @@ type config struct {
 	// K8sResources is the path to the Kubernetes resource files
 	K8sResources string `toml:"kubernetes_resources"`
 	Store        Store  `toml:"store,omitempty"`
+	KeyVault    KeyVault `toml:"keyvault,omitempty"`
 }
 
 type ResourceId struct {
@@ -29,6 +30,10 @@ type Cluster struct {
 }
 
 type ContainerRegistry struct {
+	ResourceId
+}
+
+type KeyVault struct {
 	ResourceId
 }
 

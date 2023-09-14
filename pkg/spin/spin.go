@@ -8,14 +8,15 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-func Load() (Manifest, error) {
+func Load(manifestLocation string) (Manifest, error) {
 	m := Manifest{}
-	spinTomlContents, err := os.ReadFile("spin.toml")
+	spinTomlContents, err := os.ReadFile(manifestLocation)
 	if err != nil {
 		return m, fmt.Errorf("unable to open spin.toml file: %w", err)
 	}
 
-	if m, err = load(spinTomlContents); err != nil {
+	m, err = load(spinTomlContents)
+	if err != nil {
 		return m, fmt.Errorf("unable to load spin.toml: %w", err)
 	}
 

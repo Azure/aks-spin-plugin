@@ -1,0 +1,18 @@
+spin_manifest = "./spin.toml"
+dockerfile = ""
+kubernetes_resources = ""
+
+[cluster]
+  subscription = "8ecadfc9-d1a3-4ea4-b844-0d9f87e4d7c8"
+  resource_group = "davidgamerotest"
+  name = "davidgamerotest"
+
+[container_registry]
+  subscription = "8ecadfc9-d1a3-4ea4-b844-0d9f87e4d7c8"
+  resource_group = "davidgamerotest"
+  name = "davidgamero"
+
+[keyvault]
+  subscription = "8ecadfc9-d1a3-4ea4-b844-0d9f87e4d7c8"
+  resource_group = "davidgamerotest"
+  name = "davidgamerokv"
