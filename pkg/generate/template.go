@@ -14,9 +14,17 @@ var (
 
 // DockerfileOpt is the options for the Dockerfile
 type DockerfileOpt struct {
+	// SpinManifest is the path to the spin manifest from the Dockerfile directory
 	SpinManifest string
 	// Sources is a list of sources and should be a cleaned path relative to the SpinManifest
-	Sources []string
+	Sources []Source
+}
+
+type Source struct {
+	// Path is a cleaned path of the source relative to the SpinManifest
+	Path string
+	// Relative is the relative path of the source relative to the Dockerfile
+	Relative string
 }
 
 func Dockerfile(d DockerfileOpt) ([]byte, error) {

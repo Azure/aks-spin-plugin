@@ -60,7 +60,13 @@ var dockerfileCmd = &cobra.Command{
 			return fmt.Errorf("loading spin manifest: %w", err)
 		}
 
-		sources := make([]string, 0, len(manifest.Components))
+		manifestRelativePath, err := filepath.Rel(filepath.Dir(dockerDest), spinManifest)
+		if err != nil {
+			return fmt.Errorf("getting relative path: %w", err)
+		}
+		diff := filepath.Dir(manifestRelativePath)
+
+		sources := make([]generate.Source, 0, len(manifest.Components))
 		for _, component := range manifest.Components {
 			// guard against unsupported things
 			if component.Source.URLSource.Url != "" {
@@ -88,11 +94,15 @@ var dockerfileCmd = &cobra.Command{
 				}
 			}
 
-			sources = append(sources, filepath.Clean(string(component.Source.StringSource)))
+			cleaned := filepath.Clean(string(component.Source.StringSource))
+			sources = append(sources, generate.Source{
+				Path:     cleaned,
+				Relative: filepath.Join(diff, cleaned),
+			})
 		}
 
 		dockerfile, err := generate.Dockerfile(generate.DockerfileOpt{
-			SpinManifest: spinManifest,
+			SpinManifest: manifestRelativePath,
 			Sources:      sources,
 		})
 		if err != nil {
@@ -108,6 +118,10 @@ var dockerfileCmd = &cobra.Command{
 			return fmt.Errorf("checking file existence: %w", err)
 		}
 
+		if err := os.MkdirAll(filepath.Dir(dockerDest), 0755); err != nil {
+			return fmt.Errorf("creating directory: %w", err)
+		}
+
 		f, err := os.OpenFile(dockerDest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
 			return fmt.Errorf("opening file: %w", err)
@@ -119,7 +133,6 @@ var dockerfileCmd = &cobra.Command{
 		}
 
 		lgr.Info("Dockerfile written to " + dockerDest)
-
 		lgr.Debug("finished dockerfile command")
 		return nil
 	},
