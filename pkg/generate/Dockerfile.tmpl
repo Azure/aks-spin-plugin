@@ -1,0 +1,5 @@
+FROM scratch
+COPY {{.SpinManifest}} ./spin.toml
+{{range .Sources}}
+COPY {{.}} ./{{.}}
+{{end}}
