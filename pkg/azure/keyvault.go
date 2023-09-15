@@ -55,7 +55,7 @@ func GetKeyVault(ctx context.Context, subscriptionId, resourceGroup, name string
 	if err != nil {
 		return nil, fmt.Errorf("creating client: %w", err)
 	}
-	
+
 	resp, err := vaultsClient.Get(ctx, resourceGroup, name, nil)
 	if err != nil {
 		return nil, fmt.Errorf("getting keyvault: %w", err)
@@ -116,7 +116,6 @@ func ListKeyVaults(ctx context.Context, subscriptionId, resourceGroup string) ([
 	return akvs, nil
 }
 
-
 func NewAkv(ctx context.Context, tenantId, subscriptionId, resourceGroup, name, location string) (*Akv, error) {
 	name = truncate(name, 24)
 
@@ -147,8 +146,9 @@ func NewAkv(ctx context.Context, tenantId, subscriptionId, resourceGroup, name, 
 				{
 					ObjectID: to.Ptr(clientObjectId),
 					Permissions: &armkeyvault.Permissions{
-						Certificates: []*armkeyvault.CertificatePermissions{
-							to.Ptr(armkeyvault.CertificatePermissionsCreate),
+						Secrets: []*armkeyvault.SecretPermissions{
+							to.Ptr(armkeyvault.SecretPermissionsGet),
+							to.Ptr(armkeyvault.SecretPermissionsSet),
 						},
 					},
 					TenantID:      to.Ptr(tenantId),
@@ -198,36 +198,35 @@ func (a *Akv) PutSecret(ctx context.Context, name, value string) error {
 	}
 
 	//TODO add some validation for access check so we can validate access when selecting the keyvault
-	resp,err := secretClient.GetSecret(ctx,name,"",&azsecrets.GetSecretOptions{})
+	resp, err := secretClient.GetSecret(ctx, name, "", &azsecrets.GetSecretOptions{})
 	if err != nil {
 		var respErr *azcore.ResponseError
 		ok := errors.As(err, &respErr)
 		if !ok {
-			return fmt.Errorf("extracting ResponseError while getting secret '%s': %w",name, err)
+			return fmt.Errorf("extracting ResponseError while getting secret '%s': %w", name, err)
 		}
-		if respErr.StatusCode == http.StatusNotFound{
+		if respErr.StatusCode == http.StatusNotFound {
 			lgr.Info(fmt.Sprintf("existing secret not found for key '%s'", name))
 		}
-		if respErr.StatusCode != http.StatusNotFound{
-			return fmt.Errorf("getting secret '%s': %w",name, err)
+		if respErr.StatusCode != http.StatusNotFound {
+			return fmt.Errorf("getting secret '%s': %w", name, err)
 		}
 	}
 	if err == nil {
 		lgr.Info(fmt.Sprintf("existing secret found for key '%s', checking if secret value changed", name))
-		if value == *resp.Value{
+		if value == *resp.Value {
 			lgr.Info(fmt.Sprintf("existing secret value matches for key '%s'", name))
 			return nil
 		}
 	}
 
-	_,err = secretClient.SetSecret(ctx,name,azsecrets.SetSecretParameters{Value:to.Ptr(value)},nil)
+	_, err = secretClient.SetSecret(ctx, name, azsecrets.SetSecretParameters{Value: to.Ptr(value)}, nil)
 	if err != nil {
 		return fmt.Errorf("getting key: %w", err)
 	}
 
 	return nil
 }
-
 
 func (a *Akv) GetId() string {
 	return a.Id
@@ -266,13 +265,40 @@ func (a *Akv) AddAccessPolicy(ctx context.Context, objectId string, permissions 
 
 	return nil
 }
+func (a *Akv) AddUserAccessPolicy(ctx context.Context, permissions armkeyvault.Permissions) error {
+	lgr := logger.FromContext(ctx).With("objectId", "name", a.Name, "resourceGroup", a.ResourceGroup, "subscriptionId", a.SubscriptionId)
+	ctx = logger.WithContext(ctx, lgr)
+	lgr.Info("starting to add user access policy")
+	defer lgr.Info("finished adding user access policy")
 
-func LoadCert(name string) *Cert {
-	return &Cert{
-		name: name,
+	cred, err := getCred()
+	if err != nil {
+		return fmt.Errorf("getting az credentials: %w", err)
 	}
-}
 
-func (c *Cert) GetName() string {
-	return c.name
+	objectId, err := getObjectId(ctx, cred)
+	if err != nil {
+		return fmt.Errorf("getting client object id: %w", err)
+	}
+	client, err := armkeyvault.NewVaultsClient(a.SubscriptionId, cred, nil)
+	if err != nil {
+		return fmt.Errorf("creating client: %w", err)
+	}
+
+	addition := armkeyvault.VaultAccessPolicyParameters{
+		Properties: &armkeyvault.VaultAccessPolicyProperties{
+			AccessPolicies: []*armkeyvault.AccessPolicyEntry{
+				{
+					TenantID:    to.Ptr(a.TenantId),
+					ObjectID:    to.Ptr(objectId),
+					Permissions: &permissions,
+				},
+			},
+		},
+	}
+	if _, err := client.UpdateAccessPolicy(ctx, a.ResourceGroup, a.Name, armkeyvault.AccessPolicyUpdateKindAdd, addition, nil); err != nil {
+		return fmt.Errorf("adding access policy: %w", err)
+	}
+
+	return nil
 }
