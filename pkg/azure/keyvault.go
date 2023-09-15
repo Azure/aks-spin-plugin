@@ -68,6 +68,13 @@ func GetKeyVault(ctx context.Context, subscriptionId, resourceGroup, name string
 		return nil, fmt.Errorf("parsing resource id: %w", err)
 	}
 	newAkv := LoadAkv(*kvId)
+
+	tenant, err := GetTenant(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("getting tenant: %w", err)
+	}
+	tenantId := tenant.TenantID
+	newAkv.TenantId = *tenantId
 	newAkv.Uri = *kv.Properties.VaultURI
 
 	return newAkv, nil
@@ -237,6 +244,13 @@ func (a *Akv) AddAccessPolicy(ctx context.Context, objectId string, permissions 
 	ctx = logger.WithContext(ctx, lgr)
 	lgr.Info("starting to add access policy")
 	defer lgr.Info("finished adding access policy")
+
+	if a.TenantId == "" {
+		return fmt.Errorf("tenant id is empty")
+	}
+	if objectId == "" {
+		return fmt.Errorf("object id is empty")
+	}
 
 	cred, err := getCred()
 	if err != nil {
