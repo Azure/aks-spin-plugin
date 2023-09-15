@@ -86,8 +86,32 @@ func LinkAcr(ctx context.Context, subscriptionId, clusterResourceGroup, clusterN
 	var assigneeId *string
 
 	if cluster.Identity == nil {
-		lgr.Debug("detected service principal cluster")
-		assigneeId = cluster.ManagedCluster.Properties.ServicePrincipalProfile.ClientID
+		return fmt.Errorf("serviceprincipal clusters are not supported at this time")
+		//lgr.Debug("detected service principal cluster")
+		//clientId := cluster.ManagedCluster.Properties.ServicePrincipalProfile.ClientID
+		//
+		//if clientId == nil {
+		//	return fmt.Errorf("client id for sp is nil")
+		//}
+		//
+		//tenant, err := ListTenants(ctx)
+		//if err != nil {
+		//	return fmt.Errorf("listing tenants: %w", err)
+		//}
+		//tenantId := *tenant[0].TenantID
+		//
+		//aadClient, err := NewAadClient(ctx, tenantId)
+		//if err != nil {
+		//	return fmt.Errorf("creating aad client: %w", err)
+		//}
+		//
+		//spObjId, err := aadClient.getObjectIdFromClientId(ctx, *clientId)
+		//if err != nil {
+		//	return fmt.Errorf("getting object id from client id: %w", err)
+		//}
+		//
+		//assigneeId = spObjId
+
 	} else {
 		switch *cluster.Identity.Type {
 		case armcontainerservice.ResourceIdentityTypeSystemAssigned:
@@ -107,7 +131,7 @@ func LinkAcr(ctx context.Context, subscriptionId, clusterResourceGroup, clusterN
 		}
 	}
 	if assigneeId == nil {
-		return errors.New("missing principal id cluster")
+		return errors.New("missing principal id for cluster")
 	}
 
 	raClient, err := createRoleAssignmentClient(subscriptionId)
