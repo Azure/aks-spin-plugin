@@ -19,7 +19,7 @@ const (
 
 var (
 	annotations = map[string]string{
-		"spin.kubernetes.azure.com/created-by": "true",
+		"spin.kubernetes.azure.com/created-by": "aks-spin-plugin",
 	}
 )
 
