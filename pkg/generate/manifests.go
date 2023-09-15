@@ -4,128 +4,85 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
-	"gopkg.in/yaml.v3"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	nodev1 "k8s.io/api/node/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
+	apps "k8s.io/client-go/applyconfigurations/apps/v1"
+	core "k8s.io/client-go/applyconfigurations/core/v1"
+	meta "k8s.io/client-go/applyconfigurations/meta/v1"
+	node "k8s.io/client-go/applyconfigurations/node/v1"
+	"sigs.k8s.io/yaml"
 )
 
 const (
-	ymlSeparator = "\n---\n"
+	ymlSeparator = "---\n"
 )
 
 var (
-	scheme      = runtime.NewScheme()
 	annotations = map[string]string{
 		"spin.kubernetes.azure.com/created-by": "true",
 	}
 )
 
-func init() {
-	// add any types used to scheme
-	appsv1.AddToScheme(scheme)
-	corev1.AddToScheme(scheme)
-	nodev1.AddToScheme(scheme)
-	metav1.AddMetaToScheme(scheme)
-}
-
 func Manifests(name, image string) ([]byte, error) {
-	ns := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        name,
-			Annotations: annotations,
-		},
-	}
+	// define the objects we want to generate
 
-	rc := &nodev1.RuntimeClass{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        "wasmtime-spin-v1",
-			Annotations: annotations,
-		},
-		Handler: "spin",
-		Scheduling: &nodev1.Scheduling{
-			NodeSelector: map[string]string{
-				"kubernetes.azure.com/wasmtime-spin-v0-5-1": "true",
-			},
-		},
-	}
-
+	// using applyconfiguration types to generate yaml
+	// means we only generate yaml with the fields we care about
+	ns := core.Namespace(name).WithAnnotations(annotations)
+	rc := node.RuntimeClass("wasmtime-spin-v1").
+		WithAnnotations(annotations).
+		WithHandler("spin").
+		WithScheduling(node.Scheduling().WithNodeSelector(map[string]string{
+			"kubernetes.azure.com/wasmtime-spin-v0-5-1": "true",
+		}))
 	appLabels := map[string]string{
 		"app": name,
 	}
+	dep := apps.Deployment(name, *ns.Name).
+		WithAnnotations(annotations).
+		WithSpec(
+			apps.DeploymentSpec().
+				WithReplicas(3).
+				WithSelector(meta.LabelSelector().WithMatchLabels(appLabels)).
+				WithTemplate(core.PodTemplateSpec().
+					WithLabels(appLabels).
+					WithAnnotations(annotations).
+					WithSpec(core.PodSpec().
+						WithRuntimeClassName(*rc.Name).
+						WithContainers(core.Container().
+							WithName(name).
+							WithImage(image).
+							WithCommand("/"),
+						),
+					),
+				),
+		)
+	service := core.Service(name, *ns.Name).
+		WithAnnotations(annotations).
+		WithSpec(core.ServiceSpec().
+			WithSelector(appLabels).
+			WithType(corev1.ServiceTypeLoadBalancer).
+			WithPorts(core.ServicePort().
+				WithProtocol(corev1.ProtocolTCP).
+				WithPort(80).
+				WithTargetPort(intstr.FromInt32(80)),
+			),
+		)
 
-	// todo: add kwasm to these objs
-
-	objs := []runtime.Object{
+	objs := []interface{}{
 		ns,
 		rc,
-		&appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:        name,
-				Namespace:   ns.Name,
-				Annotations: annotations,
-			},
-			Spec: appsv1.DeploymentSpec{
-				Replicas: to.Ptr(int32(3)),
-				Selector: &metav1.LabelSelector{
-					MatchLabels: appLabels,
-				},
-				Template: corev1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels:      appLabels,
-						Annotations: annotations,
-					},
-					Spec: corev1.PodSpec{
-						RuntimeClassName: to.Ptr(rc.Name),
-						Containers: []corev1.Container{
-							{
-								Name:    name,
-								Image:   image,
-								Command: []string{"/"},
-							},
-						},
-					},
-				},
-			},
-		},
-		&corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:        name,
-				Namespace:   ns.Name,
-				Annotations: annotations,
-			},
-			Spec: corev1.ServiceSpec{
-				Selector: appLabels,
-				Type:     corev1.ServiceTypeLoadBalancer,
-				Ports: []corev1.ServicePort{
-					{
-						Protocol:   corev1.ProtocolTCP,
-						Port:       80,
-						TargetPort: intstr.FromInt32(80),
-					},
-				},
-			},
-		},
+		dep,
+		service,
+		// TODO: add kwasm operator deployment
 	}
 
-	// encode to yaml
+	// marshal to yaml
 	var buf bytes.Buffer
-	codec := serializer.NewCodecFactory(scheme).LegacyCodec(scheme.PreferredVersionAllGroups()...)
 	for i, obj := range objs {
-		json, err := runtime.Encode(codec, obj)
+		out, err := yaml.Marshal(obj)
 		if err != nil {
-			return nil, fmt.Errorf("encoding object: %w", err)
-		}
-
-		var decoded map[string]interface{}
-		if err := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader(json), 4096).Decode(&decoded); err != nil {
-			return nil, fmt.Errorf("decoding object: %w", err)
+			return nil, fmt.Errorf("error marshaling object; err: %s", err.Error())
 		}
 
 		if i != 0 {
@@ -134,13 +91,8 @@ func Manifests(name, image string) ([]byte, error) {
 			}
 		}
 
-		out, err := yaml.Marshal(decoded)
-		if err != nil {
-			return nil, fmt.Errorf("marshaling object to yaml: %w", err)
-		}
-
 		if _, err := buf.Write(out); err != nil {
-			return nil, fmt.Errorf("writing object %d: %w", i, err)
+			return nil, fmt.Errorf("writing object: %w", err)
 		}
 	}
 
