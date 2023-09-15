@@ -26,13 +26,13 @@ func createRoleAssignmentClient(subscriptionId string) (*roleAssignmentClient, e
 	return &roleAssignmentClient{client: client}, nil
 }
 
-func (r *roleAssignmentClient) createRoleAssignment(ctx context.Context, objectId, roleId, scope, assignmentName string) error {
-	lgr := logger.FromContext(ctx).With("objectId", objectId, "assignmentName", assignmentName, "scope", scope)
+func (r *roleAssignmentClient) createRoleAssignment(ctx context.Context, objectId, roleId, scope, raUid string) error {
+	lgr := logger.FromContext(ctx).With("objectId", objectId, "role assignment UID", raUid, "scope", scope)
 
 	ctx = logger.WithContext(ctx, lgr)
 	lgr.Debug("linking ACR")
 
-	fullAssignmentId := fmt.Sprintf("/%s/providers/Microsoft.Authorization/roleAssignments/%s", scope, assignmentName)
+	fullAssignmentId := fmt.Sprintf("/%s/providers/Microsoft.Authorization/roleAssignments/%s", scope, raUid)
 	fulLDefinitionId := fmt.Sprintf("/providers/Microsoft.Authorization/roleDefinitions/%s", roleId)
 
 	params := armauthorization.RoleAssignmentCreateParameters{

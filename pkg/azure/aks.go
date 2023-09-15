@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
@@ -63,7 +64,8 @@ func ListClusters(ctx context.Context, subscriptionId, resourceGroup string) ([]
 }
 
 func LinkAcr(ctx context.Context, subscriptionId, clusterResourceGroup, clusterName, acrResourceGroup, acrName string) error {
-	lgr := logger.FromContext(ctx).With("subscription", subscriptionId, "resource group", clusterResourceGroup, "acr name", acrName)
+	lgr := logger.FromContext(ctx).With("subscription", subscriptionId, "resource group", clusterResourceGroup, "cluster name", clusterName,
+		"acr name", acrName)
 	ctx = logger.WithContext(ctx, lgr)
 	lgr.Debug("linking ACR")
 
@@ -80,34 +82,44 @@ func LinkAcr(ctx context.Context, subscriptionId, clusterResourceGroup, clusterN
 	if err != nil {
 		return fmt.Errorf("getting cluster information: %w", err)
 	}
-	//armcontainerservice.ResourceIdentityTypeNone is what's used when there's a serviceprinciple - otherwise it's either system or user assigned
-	if *cluster.Identity.Type == armcontainerservice.ResourceIdentityTypeSystemAssigned || *cluster.Identity.Type == armcontainerservice.ResourceIdentityTypeUserAssigned {
-		lgr.Debug("detected MSI enabled cluster")
 
-		// https://github.com/Azure/azure-cli/blob/8f91d71e8c3af9ab10024e12c51a0dab573df9f2/src/azure-cli/azure/cli/command_modules/acs/managed_cluster_decorator.py#L6177
-		msiInfo, ok := cluster.Identity.UserAssignedIdentities["kubeletidentity"]
-		if !ok {
-			return errors.New("missing kubeletidentity on MSI cluster")
+	var assigneeId *string
+
+	if cluster.Identity == nil {
+		lgr.Debug("detected service principal cluster")
+		assigneeId = cluster.ManagedCluster.Properties.ServicePrincipalProfile.ClientID
+	} else {
+		switch *cluster.Identity.Type {
+		case armcontainerservice.ResourceIdentityTypeSystemAssigned:
+			lgr.Debug("detected system-assigned identity cluster")
+			assigneeId = cluster.Identity.PrincipalID
+		case armcontainerservice.ResourceIdentityTypeUserAssigned:
+			lgr.Debug("detected user-assigned identity cluster")
+			// https://github.com/Azure/azure-cli/blob/8f91d71e8c3af9ab10024e12c51a0dab573df9f2/src/azure-cli/azure/cli/command_modules/acs/managed_cluster_decorator.py#L6177
+			msiInfo, ok := cluster.Properties.IdentityProfile["kubeletidentity"]
+			fmt.Println(cluster.Properties.IdentityProfile)
+			if !ok {
+				return errors.New("missing kubeletidentity on User Assigned Identity cluster")
+			}
+			assigneeId = msiInfo.ObjectID
+		default:
+			return fmt.Errorf("unknown cluster identity type")
 		}
-		objId := msiInfo.PrincipalID
-		if objId == nil {
-			return errors.New("missing principal id on MSI cluster")
-		}
-
-		raClient, err := createRoleAssignmentClient(subscriptionId)
-		if err != nil {
-			return fmt.Errorf("creating role assignment client: %w", err)
-		}
-
-		scope := fmt.Sprintf(acrResourceIdTemplate, subscriptionId, acrResourceGroup, acrName)
-
-		err = raClient.createRoleAssignment(ctx, *objId, acrPullRoleId, scope, "acrpull")
-
-		return err
+	}
+	if assigneeId == nil {
+		return errors.New("missing principal id cluster")
 	}
 
-	// otherwise serviceprincipal cluster
-	return nil
+	raClient, err := createRoleAssignmentClient(subscriptionId)
+	if err != nil {
+		return fmt.Errorf("creating role assignment client: %w", err)
+	}
+
+	scope := fmt.Sprintf(acrResourceIdTemplate, subscriptionId, acrResourceGroup, acrName)
+
+	raUid := uuid.New().String()
+	err = raClient.createRoleAssignment(ctx, *assigneeId, acrPullRoleId, scope, raUid)
+	return err
 }
 
 func NewCluster(ctx context.Context, subscriptionId, resourceGroup, name, location string) error {
