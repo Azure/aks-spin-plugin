@@ -16,6 +16,15 @@ import (
 	"github.com/azure/spin-aks-plugin/pkg/azure"
 	"github.com/azure/spin-aks-plugin/pkg/logger"
 	"github.com/azure/spin-aks-plugin/pkg/prompt"
+	"github.com/azure/spin-aks-plugin/pkg/state"
+)
+
+const (
+	subscriptionKey      = "subscription"
+	resourceGroupKey     = "resourceGroup"
+	clusterKey           = "cluster"
+	containerRegistryKey = "containerRegistry"
+	spinManifestKey      = "spinManifest"
 )
 
 var (
@@ -51,16 +60,30 @@ func ensureCluster(ctx context.Context) error {
 			return fmt.Errorf("listing subscriptions: %w", err)
 		}
 
+		def, err := state.Get(ctx, subscriptionKey)
+		if err != nil && !errors.Is(err, state.KeyNotFoundErr) {
+			// failing to get subscription from state is not worth failing
+			lgr.Debug("failed to get subscription from state: " + err.Error())
+			def = ""
+		}
+
 		lgr.Debug("prompting for cluster subscription")
 		sub, err := prompt.Select("Select your Cluster's Subscription", subs, &prompt.SelectOpt[armsubscription.Subscription]{
 			Field: func(t armsubscription.Subscription) string {
 				return *t.DisplayName
 			},
+			Default: def,
 		})
 		if err != nil {
 			return fmt.Errorf("selecting subscription: %w", err)
 		}
 		c.Cluster.Subscription = *sub.SubscriptionID
+
+		if err := state.Set(ctx, subscriptionKey, *sub.DisplayName); err != nil {
+			// failing to set subscription in state is not worth failing
+			lgr.Debug("failed to set subscription in state: " + err.Error())
+		}
+
 		lgr.Debug("finished prompting for cluster subscription")
 	}
 
@@ -96,17 +119,30 @@ func ensureAcr(ctx context.Context) error {
 			return fmt.Errorf("listing subscriptions: %w", err)
 		}
 
+		def, err := state.Get(ctx, subscriptionKey)
+		if err != nil && !errors.Is(err, state.KeyNotFoundErr) {
+			// failing to get subscription from state is not worth failing
+			lgr.Debug("failed to get subscription from state: " + err.Error())
+			def = ""
+		}
+
 		lgr.Debug("prompting for acr subscription")
 		sub, err := prompt.Select("Select your Container Registry's Subscription", subs, &prompt.SelectOpt[armsubscription.Subscription]{
 			Field: func(t armsubscription.Subscription) string {
 				return *t.DisplayName
 			},
+			Default: def,
 		})
 		if err != nil {
 			return fmt.Errorf("selecting subscription: %w", err)
 		}
-
 		c.ContainerRegistry.Subscription = *sub.SubscriptionID
+
+		if err := state.Set(ctx, subscriptionKey, *sub.DisplayName); err != nil {
+			// failing to set subscription in state is not worth failing
+			lgr.Debug("failed to set subscription in state: " + err.Error())
+		}
+
 		lgr.Debug("finished prompting for acr subscription")
 	}
 
@@ -145,6 +181,13 @@ func ensureSpinManifest(ctx context.Context) error {
 			lgr.Debug("failed to guess spin manifest: " + err.Error())
 		}
 
+		if guess == "" {
+			def, err := state.Get(ctx, spinManifestKey)
+			if err == nil {
+				guess = def
+			}
+		}
+
 		manifest, err := prompt.Input("Input your spin manifest location", &prompt.InputOpt{
 			Validate: prompt.FileExists,
 			Default:  guess,
@@ -154,6 +197,12 @@ func ensureSpinManifest(ctx context.Context) error {
 		}
 
 		c.SpinManifest = manifest
+
+		if err := state.Set(ctx, spinManifestKey, manifest); err != nil {
+			// failing to set spin manifest in state is not worth failing
+			lgr.Debug("failed to set spin manifest in state: " + err.Error())
+		}
+
 		lgr.Debug("finished prompting for spin manifest")
 	}
 
@@ -177,6 +226,13 @@ func getResourceGroup(ctx context.Context, subscriptionId, possessive string) (s
 		return "", fmt.Errorf("listing resource groups: %w", err)
 	}
 
+	def, err := state.Get(ctx, resourceGroupKey)
+	if err != nil && !errors.Is(err, state.KeyNotFoundErr) {
+		// failing to get resource group from state is not worth failing
+		lgr.Debug("failed to get resource group from state: " + err.Error())
+		def = ""
+	}
+
 	rgsWithNew := withNew(rgs)
 	lgr.Debug(fmt.Sprintf("prompting for %s resource group", possessive))
 	selection, err := prompt.Select(fmt.Sprintf("Select your %s Resource Group", possessive), rgsWithNew, &prompt.SelectOpt[newish[armresources.ResourceGroup]]{
@@ -187,12 +243,18 @@ func getResourceGroup(ctx context.Context, subscriptionId, possessive string) (s
 
 			return *t.Data.Name
 		},
+		Default: def,
 	})
 	if err != nil {
 		return "", fmt.Errorf("prompting for resource group: %w", err)
 	}
 
 	if !selection.IsNew {
+		if err := state.Set(ctx, resourceGroupKey, *selection.Data.Name); err != nil {
+			// failing to set resource group in state is not worth failing
+			lgr.Debug("failed to set resource group in state: " + err.Error())
+		}
+
 		lgr.Debug(fmt.Sprintf("finished getting %s resource group", possessive))
 		return *selection.Data.Name, nil
 	}
@@ -223,6 +285,11 @@ func getResourceGroup(ctx context.Context, subscriptionId, possessive string) (s
 	}
 	lgr.Info("created Resource Group " + name)
 
+	if err := state.Set(ctx, resourceGroupKey, name); err != nil {
+		// failing to set resource group in state is not worth failing
+		lgr.Debug("failed to set resource group in state: " + err.Error())
+	}
+
 	lgr.Debug(fmt.Sprintf("finished getting %s resource group", possessive))
 	return name, nil
 }
@@ -243,6 +310,13 @@ func getCluster(ctx context.Context, subscriptionId, resourceGroup string) (stri
 		return "", fmt.Errorf("listing clusters: %w", err)
 	}
 
+	def, err := state.Get(ctx, clusterKey)
+	if err != nil && !errors.Is(err, state.KeyNotFoundErr) {
+		// failing to get cluster from state is not worth failing
+		lgr.Debug("failed to get cluster from state: " + err.Error())
+		def = ""
+	}
+
 	clustersWithNew := withNew(clusters)
 	selection, err := prompt.Select("Select your Cluster", clustersWithNew, &prompt.SelectOpt[newish[armcontainerservice.ManagedCluster]]{
 		Field: func(t newish[armcontainerservice.ManagedCluster]) string {
@@ -252,12 +326,18 @@ func getCluster(ctx context.Context, subscriptionId, resourceGroup string) (stri
 
 			return *t.Data.Name
 		},
+		Default: def,
 	})
 	if err != nil {
 		return "", fmt.Errorf("selecting cluster: %w", err)
 	}
 
 	if !selection.IsNew {
+		if err := state.Set(ctx, clusterKey, *selection.Data.Name); err != nil {
+			// failing to set cluster in state is not worth failing
+			lgr.Debug("failed to set cluster in state: " + err.Error())
+		}
+
 		lgr.Debug("finished getting cluster")
 		return *selection.Data.Name, nil
 	}
@@ -288,6 +368,11 @@ func getCluster(ctx context.Context, subscriptionId, resourceGroup string) (stri
 	}
 	lgr.Info("created Managed Cluster " + name)
 
+	if err := state.Set(ctx, clusterKey, name); err != nil {
+		// failing to set cluster in state is not worth failing
+		lgr.Debug("failed to set cluster in state: " + err.Error())
+	}
+
 	lgr.Debug("finished getting cluster")
 	return name, nil
 }
@@ -308,6 +393,13 @@ func getContainerRegistry(ctx context.Context, subscriptionId, resourceGroup str
 		return "", fmt.Errorf("listing acrs: %w", err)
 	}
 
+	def, err := state.Get(ctx, containerRegistryKey)
+	if err != nil && !errors.Is(err, state.KeyNotFoundErr) {
+		// failing to get container registry from state is not worth failing
+		lgr.Debug("failed to get container registry from state: " + err.Error())
+		def = ""
+	}
+
 	acrsWithNew := withNew(acrs)
 	selection, err := prompt.Select("Select your Container Registry", acrsWithNew, &prompt.SelectOpt[newish[armcontainerregistry.Registry]]{
 		Field: func(t newish[armcontainerregistry.Registry]) string {
@@ -317,12 +409,18 @@ func getContainerRegistry(ctx context.Context, subscriptionId, resourceGroup str
 
 			return *t.Data.Name
 		},
+		Default: def,
 	})
 	if err != nil {
 		return "", fmt.Errorf("selecting container registry: %w", err)
 	}
 
 	if !selection.IsNew {
+		if err := state.Set(ctx, containerRegistryKey, *selection.Data.Name); err != nil {
+			// failing to set container registry in state is not worth failing
+			lgr.Debug("failed to set container registry in state: " + err.Error())
+		}
+
 		lgr.Debug("finished getting container registry")
 		return *selection.Data.Name, nil
 	}
@@ -352,6 +450,11 @@ func getContainerRegistry(ctx context.Context, subscriptionId, resourceGroup str
 		return "", fmt.Errorf("creating new container registry: %w", err)
 	}
 	lgr.Info("created Container Registry " + name)
+
+	if err := state.Set(ctx, containerRegistryKey, name); err != nil {
+		// failing to set container registry in state is not worth failing
+		lgr.Debug("failed to set container registry in state: " + err.Error())
+	}
 
 	lgr.Debug("finished getting container registry")
 	return name, nil
