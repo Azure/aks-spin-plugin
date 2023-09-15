@@ -10,7 +10,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault"
-	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 	"github.com/azure/spin-aks-plugin/pkg/logger"
 )
@@ -22,13 +21,6 @@ type Akv struct {
 	SubscriptionId string
 	ResourceGroup  string
 	Name           string
-}
-
-// CertOpt specifies what kind of certificate to create
-type CertOpt func(cert *azcertificates.CreateCertificateParameters) error
-
-type Cert struct {
-	name string
 }
 
 func LoadAkv(id arm.ResourceID) *Akv {
@@ -188,7 +180,7 @@ func NewAkv(ctx context.Context, tenantId, subscriptionId, resourceGroup, name, 
 	}, nil
 }
 
-func (a *Akv) PutSecret(ctx context.Context, name, value string) error {
+func (a *Akv) PutSecretIfNewValue(ctx context.Context, name, value string) error {
 	lgr := logger.FromContext(ctx).With("name", name, "resourceGroup", a.ResourceGroup, "subscriptionId", a.SubscriptionId)
 	ctx = logger.WithContext(ctx, lgr)
 	lgr.Info("starting to put secret")
