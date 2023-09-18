@@ -116,7 +116,7 @@ func EnableKeyvaultCSIDriver(ctx context.Context, subscriptionId, resourceGroup 
 		}
 	}
 
-	err := PutCluster(ctx, subscriptionId, resourceGroup, mc)
+	err := putCluster(ctx, subscriptionId, resourceGroup, mc)
 	if err != nil {
 		return fmt.Errorf("putting cluster: %w", err)
 	}

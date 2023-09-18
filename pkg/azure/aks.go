@@ -211,7 +211,7 @@ func NewCluster(ctx context.Context, subscriptionId, resourceGroup, name, locati
 	return nil
 }
 
-func PutCluster(ctx context.Context, subscriptionId, resourceGroup string, mc *armcontainerservice.ManagedCluster) error {
+func putCluster(ctx context.Context, subscriptionId, resourceGroup string, mc *armcontainerservice.ManagedCluster) error {
 	lgr := logger.FromContext(ctx).With("subscription", subscriptionId, "resource group", resourceGroup, "cluster", mc)
 	ctx = logger.WithContext(ctx, lgr)
 	lgr.Debug("putting AKS cluster")
