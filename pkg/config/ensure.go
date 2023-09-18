@@ -291,6 +291,7 @@ func ensureKeyVault(ctx context.Context, m spin.Manifest) error {
 		// TODO check keyvault access policy for existing keyvaults to see if we need to add the cluster's identity or user put/get permissions
 
 		akv, err := azure.GetKeyVault(ctx, c.KeyVault.Subscription, c.KeyVault.ResourceGroup, c.KeyVault.Name)
+		c.TenantID = akv.TenantId
 		if err != nil {
 			return fmt.Errorf("getting keyvault: %w", err)
 		}
@@ -640,17 +641,11 @@ func getKeyVault(ctx context.Context, subscriptionId, resourceGroup string) (str
 		return "", fmt.Errorf("selecting new keyvault location: %w", err)
 	}
 
-	tenants, err := azure.ListTenants(ctx)
-	tenantId := ""
+	t, err := azure.GetTenant(ctx)
 	if err != nil {
-		return "", fmt.Errorf("listing tenants: %w", err)
+		return "", fmt.Errorf("getting tenant: %w", err)
 	}
-	if len(tenants) == 0 {
-		return "", errors.New("no tenants found")
-	}
-	if len(tenants) == 1 {
-		tenantId = *tenants[0].TenantID
-	}
+	tenantId := *t.TenantID
 
 	_, err = azure.NewAkv(ctx, tenantId, subscriptionId, resourceGroup, name, *location.Name)
 	if err != nil {
