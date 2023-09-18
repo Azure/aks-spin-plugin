@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v2"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/authorization/armauthorization/v2"
@@ -98,7 +99,45 @@ func NewContainerRegistry(ctx context.Context, subscriptionId, resourceGroup, na
 
 	if _, err := poll.PollUntilDone(ctx, nil); err != nil {
 		return fmt.Errorf("creating container registry: %w", err)
+	}
 
+	return nil
+}
+
+func EnableKeyvaultCSIDriver(ctx context.Context, subscriptionId, resourceGroup string, mc *armcontainerservice.ManagedCluster) error {
+	lgr := logger.FromContext(ctx).With("cluster", mc)
+	ctx = logger.WithContext(ctx, lgr)
+	lgr.Debug("enabling keyvault CSI driver for cluster")
+
+	if mc == nil {
+		return errors.New("managed cluster cannot be nil to install keyvault csi driver")
+	}
+
+	if mc.Properties == nil {
+		mc.Properties = &armcontainerservice.ManagedClusterProperties{}
+	}
+
+	if mc.Properties.AddonProfiles != nil {
+		mc.Properties.AddonProfiles["azureKeyvaultSecretsProvider"] = &armcontainerservice.ManagedClusterAddonProfile{
+			Enabled: to.Ptr(true),
+			Config: map[string]*string{
+				"enableSecretRotation": to.Ptr("true"),
+			},
+		}
+	} else {
+		mc.Properties.AddonProfiles = map[string]*armcontainerservice.ManagedClusterAddonProfile{
+			"azureKeyvaultSecretsProvider": {
+				Enabled: to.Ptr(true),
+				Config: map[string]*string{
+					"enableSecretRotation": to.Ptr("true"),
+				},
+			},
+		}
+	}
+
+	err := putCluster(ctx, subscriptionId, resourceGroup, mc)
+	if err != nil {
+		return fmt.Errorf("putting cluster: %w", err)
 	}
 
 	return nil
