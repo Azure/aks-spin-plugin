@@ -33,8 +33,7 @@ func getCred() (*azidentity.DefaultAzureCredential, error) {
 // adapted from https://stackoverflow.com/a/75658185
 func getObjectId(ctx context.Context, cred azcore.TokenCredential) (string, error) {
 	token, err := cred.GetToken(ctx, policy.TokenRequestOptions{
-		// okay to hardcode to PublicCloud since this is a hackathon project
-		// TODO: make this configurable
+		// okay to hardcode to PublicCloud since we should never deploy to anything else in public OSS repo
 		Scopes: []string{cloud.AzurePublic.Services[cloud.ResourceManager].Endpoint + "/.default"},
 	})
 	if err != nil {
