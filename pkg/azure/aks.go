@@ -13,11 +13,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const (
-	acrPullRoleId         = "7f951dda-4ed3-4680-a7ca-43fe172d538d"
-	acrResourceIdTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ContainerRegistry/registries/%s"
-)
-
 func aksFactory(subscriptionId string) (*armcontainerservice.ClientFactory, error) {
 	cred, err := getCred()
 	if err != nil {
@@ -142,7 +137,7 @@ func LinkAcr(ctx context.Context, subscriptionId, clusterResourceGroup, clusterN
 	scope := fmt.Sprintf(acrResourceIdTemplate, subscriptionId, acrResourceGroup, acrName)
 
 	raUid := uuid.New().String()
-	err = raClient.createRoleAssignment(ctx, *assigneeId, acrPullRoleId, scope, raUid)
+	err = raClient.createRoleAssignment(ctx, *assigneeId, acrPullRoleDefinition, scope, raUid)
 	return err
 }
 
@@ -209,6 +204,25 @@ func NewCluster(ctx context.Context, subscriptionId, resourceGroup, name, locati
 	}
 
 	return nil
+}
+
+func GetCluster(ctx context.Context, subscriptionId, resourceGroup, clusterName string) (*armcontainerservice.ManagedCluster, error) {
+	lgr := logger.FromContext(ctx).With("subscription", subscriptionId, "resource group", resourceGroup, "cluster name", clusterName)
+	ctx = logger.WithContext(ctx, lgr)
+	lgr.Debug("getting AKS cluster")
+
+	client, err := aksFactory(subscriptionId)
+	if err != nil {
+		return nil, fmt.Errorf("getting aks client: %w", err)
+	}
+
+	lgr.Info("getting managed cluster")
+	res, err := client.NewManagedClustersClient().Get(ctx, resourceGroup, clusterName, nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting managed cluster: %w", err)
+	}
+
+	return &res.ManagedCluster, nil
 }
 
 func pollWithLog[T any](ctx context.Context, p *runtime.Poller[T], msg string) (T, error) {
