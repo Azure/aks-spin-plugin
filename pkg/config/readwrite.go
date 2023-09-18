@@ -25,6 +25,11 @@ func (o *Opts) def() {
 	}
 }
 
+// Get returns the current aks spin config
+func Get() config {
+	return c
+}
+
 // Load loads any current aks spin configs from a file or the environment, with precedence towards env variables
 func Load(o Opts) error {
 	opts = &o
