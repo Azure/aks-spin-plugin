@@ -13,10 +13,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const (
-	acrResourceIdTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ContainerRegistry/registries/%s"
-)
-
 func aksFactory(subscriptionId string) (*armcontainerservice.ClientFactory, error) {
 	cred, err := getCred()
 	if err != nil {

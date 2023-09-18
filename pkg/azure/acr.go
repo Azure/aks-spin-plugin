@@ -19,6 +19,7 @@ type Role struct {
 const (
 	acrPullRoleName       = "AcrPull"
 	acrPullRoleDefinition = "7f951dda-4ed3-4680-a7ca-43fe172d538d"
+	acrResourceIdTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ContainerRegistry/registries/%s"
 )
 
 var (
