@@ -85,7 +85,7 @@ func NewContainerRegistry(ctx context.Context, subscriptionId, resourceGroup, na
 	return nil
 }
 
-func enableKeyvaultCSIDriver(ctx context.Context, subscriptionId, resourceGroup string, mc *armcontainerservice.ManagedCluster) error {
+func EnableKeyvaultCSIDriver(ctx context.Context, subscriptionId, resourceGroup string, mc *armcontainerservice.ManagedCluster) error {
 	lgr := logger.FromContext(ctx).With("cluster", mc)
 	ctx = logger.WithContext(ctx, lgr)
 	lgr.Debug("enabling keyvault CSI driver for cluster")
