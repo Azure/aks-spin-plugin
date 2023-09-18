@@ -146,6 +146,27 @@ func LinkAcr(ctx context.Context, subscriptionId, clusterResourceGroup, clusterN
 	return err
 }
 
+func GetManagedCluster(ctx context.Context, subscriptionId, resourceGroup, name string) (armcontainerservice.ManagedCluster, error) {
+	lgr := logger.FromContext(ctx).With("subscription", subscriptionId, "resource group", resourceGroup)
+	ctx = logger.WithContext(ctx, lgr)
+	lgr.Debug("getting AKS clusters")
+	c := armcontainerservice.ManagedCluster{}
+
+	client, err := aksFactory(subscriptionId)
+	if err != nil {
+		return c, fmt.Errorf("getting aks client: %w", err)
+	}
+
+	resp, err := client.NewManagedClustersClient().Get(ctx, resourceGroup, name, nil)
+	if err != nil {
+		return c, fmt.Errorf("getting managed cluster: %w", err)
+	}
+	c = resp.ManagedCluster
+
+	lgr.Debug("finished getting AKS cluster")
+	return c, nil
+}
+
 func NewCluster(ctx context.Context, subscriptionId, resourceGroup, name, location string) error {
 	lgr := logger.FromContext(ctx).With("subscription", subscriptionId, "resource group", resourceGroup, "name", name)
 	ctx = logger.WithContext(ctx, lgr)

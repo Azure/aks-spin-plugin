@@ -9,6 +9,24 @@ import (
 	"github.com/azure/spin-aks-plugin/pkg/logger"
 )
 
+func GetTenant(ctx context.Context) (*armsubscription.TenantIDDescription, error) {
+	lgr := logger.FromContext(ctx)
+	lgr.Debug("getting Azure tenant")
+
+	tenants, err := ListTenants(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing tenants: %w", err)
+	}
+
+	if len(tenants) == 0 {
+		return nil, errors.New("no tenants found")
+	}
+	if len(tenants) > 1 {
+		return nil, errors.New("multiple tenants found")
+	}
+	return &tenants[0], nil
+}
+
 func ListTenants(ctx context.Context) ([]armsubscription.TenantIDDescription, error) {
 	lgr := logger.FromContext(ctx)
 	lgr.Debug("listing Azure subscriptions")
