@@ -10,6 +10,12 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v2"
 	"github.com/azure/spin-aks-plugin/pkg/logger"
+	"github.com/google/uuid"
+)
+
+const (
+	acrPullRoleId         = "7f951dda-4ed3-4680-a7ca-43fe172d538d"
+	acrResourceIdTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ContainerRegistry/registries/%s"
 )
 
 func aksFactory(subscriptionId string) (*armcontainerservice.ClientFactory, error) {
@@ -55,6 +61,110 @@ func ListClusters(ctx context.Context, subscriptionId, resourceGroup string) ([]
 
 	lgr.Debug("finished listing AKS clusters")
 	return clusters, nil
+}
+
+func LinkAcr(ctx context.Context, subscriptionId, clusterResourceGroup, clusterName, acrResourceGroup, acrName string) error {
+	lgr := logger.FromContext(ctx).With("subscription", subscriptionId, "resource group", clusterResourceGroup, "cluster name", clusterName,
+		"acr name", acrName)
+	ctx = logger.WithContext(ctx, lgr)
+	lgr.Debug("linking ACR")
+
+	// add validation for acr?
+
+	client, err := aksFactory(subscriptionId)
+	if err != nil {
+		return fmt.Errorf("getting aks client: %w", err)
+	}
+
+	lgr.Debug("getting cluster information")
+	cluster, err := client.NewManagedClustersClient().Get(ctx, clusterResourceGroup, clusterName, nil)
+
+	if err != nil {
+		return fmt.Errorf("getting cluster information: %w", err)
+	}
+
+	var assigneeId *string
+
+	if cluster.Identity == nil {
+		return fmt.Errorf("serviceprincipal clusters are not supported at this time")
+		//lgr.Debug("detected service principal cluster")
+		//clientId := cluster.ManagedCluster.Properties.ServicePrincipalProfile.ClientID
+		//
+		//if clientId == nil {
+		//	return fmt.Errorf("client id for sp is nil")
+		//}
+		//
+		//tenant, err := ListTenants(ctx)
+		//if err != nil {
+		//	return fmt.Errorf("listing tenants: %w", err)
+		//}
+		//tenantId := *tenant[0].TenantID
+		//
+		//aadClient, err := NewAadClient(ctx, tenantId)
+		//if err != nil {
+		//	return fmt.Errorf("creating aad client: %w", err)
+		//}
+		//
+		//spObjId, err := aadClient.getObjectIdFromClientId(ctx, *clientId)
+		//if err != nil {
+		//	return fmt.Errorf("getting object id from client id: %w", err)
+		//}
+		//
+		//assigneeId = spObjId
+
+	} else {
+		switch *cluster.Identity.Type {
+		case armcontainerservice.ResourceIdentityTypeSystemAssigned:
+			lgr.Debug("detected system-assigned identity cluster")
+			assigneeId = cluster.Identity.PrincipalID
+		case armcontainerservice.ResourceIdentityTypeUserAssigned:
+			lgr.Debug("detected user-assigned identity cluster")
+			// https://github.com/Azure/azure-cli/blob/8f91d71e8c3af9ab10024e12c51a0dab573df9f2/src/azure-cli/azure/cli/command_modules/acs/managed_cluster_decorator.py#L6177
+			msiInfo, ok := cluster.Properties.IdentityProfile["kubeletidentity"]
+			fmt.Println(cluster.Properties.IdentityProfile)
+			if !ok {
+				return errors.New("missing kubeletidentity on User Assigned Identity cluster")
+			}
+			assigneeId = msiInfo.ObjectID
+		default:
+			return fmt.Errorf("unknown cluster identity type")
+		}
+	}
+	if assigneeId == nil {
+		return errors.New("missing principal id for cluster")
+	}
+
+	raClient, err := createRoleAssignmentClient(subscriptionId)
+	if err != nil {
+		return fmt.Errorf("creating role assignment client: %w", err)
+	}
+
+	scope := fmt.Sprintf(acrResourceIdTemplate, subscriptionId, acrResourceGroup, acrName)
+
+	raUid := uuid.New().String()
+	err = raClient.createRoleAssignment(ctx, *assigneeId, acrPullRoleId, scope, raUid)
+	return err
+}
+
+func GetManagedCluster(ctx context.Context, subscriptionId, resourceGroup, name string) (armcontainerservice.ManagedCluster, error) {
+	lgr := logger.FromContext(ctx).With("subscription", subscriptionId, "resource group", resourceGroup)
+	ctx = logger.WithContext(ctx, lgr)
+	lgr.Debug("getting AKS clusters")
+	c := armcontainerservice.ManagedCluster{}
+
+	client, err := aksFactory(subscriptionId)
+	if err != nil {
+		return c, fmt.Errorf("getting aks client: %w", err)
+	}
+
+	resp, err := client.NewManagedClustersClient().Get(ctx, resourceGroup, name, nil)
+	if err != nil {
+		return c, fmt.Errorf("getting managed cluster: %w", err)
+	}
+	c = resp.ManagedCluster
+
+	lgr.Debug("finished getting AKS cluster")
+	return c, nil
 }
 
 func NewCluster(ctx context.Context, subscriptionId, resourceGroup, name, location string) error {
