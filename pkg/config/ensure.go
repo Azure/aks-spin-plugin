@@ -7,15 +7,21 @@ import (
 	"io/fs"
 	"path/filepath"
 	"regexp"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerregistry/armcontainerregistry"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v2"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armsubscriptions"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/subscription/armsubscription"
 	"github.com/azure/spin-aks-plugin/pkg/azure"
 	"github.com/azure/spin-aks-plugin/pkg/logger"
 	"github.com/azure/spin-aks-plugin/pkg/prompt"
+	"github.com/azure/spin-aks-plugin/pkg/spin"
 	"github.com/azure/spin-aks-plugin/pkg/state"
 )
 
@@ -25,11 +31,13 @@ const (
 	clusterKey           = "cluster"
 	containerRegistryKey = "containerRegistry"
 	spinManifestKey      = "spinManifest"
+	keyVaultKey          = "keyVault"
 )
 
 var (
 	alphanumUnderscoreParenHyphenPeriodRegex = regexp.MustCompile("^[a-zA-Z0-9_()\\-.]+$")
 	alphanumUnderscoreHyphenRegex            = regexp.MustCompile("^[a-zA-Z0-9_\\-]+$")
+	alphanumHyphenRegex                      = regexp.MustCompile("^[a-zA-Z0-9\\-]+$")
 	alphanumRegex                            = regexp.MustCompile("^[a-zA-Z0-9]+$")
 )
 
@@ -43,8 +51,13 @@ func EnsureValid(ctx context.Context) error {
 		return fmt.Errorf("ensuring acr: %w", err)
 	}
 
-	if err := ensureSpinManifest(ctx); err != nil {
+	m, err := ensureSpinManifest(ctx)
+	if err != nil {
 		return fmt.Errorf("ensuring spin manifest: %w", err)
+	}
+
+	if err := ensureKeyVault(ctx, m); err != nil {
+		return fmt.Errorf("ensuring keyvault: %w", err)
 	}
 
 	return nil
@@ -97,7 +110,7 @@ func ensureCluster(ctx context.Context) error {
 	}
 
 	if c.Cluster.Name == "" {
-		cluster, err := getCluster(ctx, c.Cluster.Subscription, c.Cluster.ResourceGroup)
+		cluster, err := GetClusterName(ctx, c.Cluster.Subscription, c.Cluster.ResourceGroup)
 		if err != nil {
 			return fmt.Errorf("getting cluster name: %w", err)
 		}
@@ -168,9 +181,10 @@ func ensureAcr(ctx context.Context) error {
 	return nil
 }
 
-func ensureSpinManifest(ctx context.Context) error {
+func ensureSpinManifest(ctx context.Context) (spin.Manifest, error) {
 	lgr := logger.FromContext(ctx)
 	lgr.Debug("starting to ensure spin manifest")
+	m := spin.Manifest{}
 
 	if c.SpinManifest == "" {
 		lgr.Debug("prompting for spin manifest")
@@ -193,7 +207,7 @@ func ensureSpinManifest(ctx context.Context) error {
 			Default:  guess,
 		})
 		if err != nil {
-			return fmt.Errorf("inputting spin manifest: %w", err)
+			return m, fmt.Errorf("inputting spin manifest: %w", err)
 		}
 
 		c.SpinManifest = manifest
@@ -206,8 +220,106 @@ func ensureSpinManifest(ctx context.Context) error {
 		lgr.Debug("finished prompting for spin manifest")
 	}
 
+	m, err := spin.Load(c.SpinManifest)
+	if err != nil {
+		return m, fmt.Errorf("loading spin manifest: %w", err)
+	}
+
 	lgr.Debug("done ensuring spin manifest")
+	return m, nil
+}
+
+func ensureKeyVault(ctx context.Context, m spin.Manifest) error {
+	lgr := logger.FromContext(ctx)
+	lgr.Debug("starting to ensure keyvault config")
+
+	lgr.Debug(fmt.Sprintf("found %d variables", len(m.Variables)))
+	hasSecretVariable := false
+	for _, v := range m.Variables {
+		hasSecretVariable = hasSecretVariable || v.Secret
+	}
+
+	if hasSecretVariable {
+		lgr.Debug("found at least one secret variable, prompting for keyvault")
+
+		subs, err := azure.ListSubscriptions(ctx)
+		if err != nil {
+			return fmt.Errorf("listing subscriptions: %w", err)
+		}
+
+		def, err := state.Get(ctx, subscriptionKey)
+		if err != nil && !errors.Is(err, state.KeyNotFoundErr) {
+			// failing to get subscription from state is not worth failing
+			lgr.Debug("failed to get subscription from state: " + err.Error())
+			def = ""
+		}
+
+		lgr.Debug("prompting for keyvault subscription")
+		sub, err := prompt.Select("Select your KeyVault's Subscription", subs, &prompt.SelectOpt[armsubscription.Subscription]{
+			Field: func(t armsubscription.Subscription) string {
+				return *t.DisplayName
+			},
+			Default: def,
+		})
+		if err != nil {
+			return fmt.Errorf("selecting subscription: %w", err)
+		}
+		c.KeyVault.Subscription = *sub.SubscriptionID
+
+		if err := state.Set(ctx, subscriptionKey, *sub.DisplayName); err != nil {
+			// failing to set subscription in state is not worth failing
+			lgr.Debug("failed to set subscription in state: " + err.Error())
+		}
+
+		if c.KeyVault.ResourceGroup == "" {
+			rg, err := getResourceGroup(ctx, c.KeyVault.Subscription, "KeyVault's")
+			if err != nil {
+				return fmt.Errorf("getting keyvault's resource group: %w", err)
+			}
+
+			c.KeyVault.ResourceGroup = rg
+		}
+		if c.KeyVault.Name == "" {
+			kv, err := getKeyVault(ctx, c.KeyVault.Subscription, c.KeyVault.ResourceGroup)
+			if err != nil {
+				return fmt.Errorf("getting keyvault's name: %w", err)
+			}
+
+			c.KeyVault.Name = kv
+		}
+
+		// TODO check keyvault access policy for existing keyvaults to see if we need to add the cluster's identity or user put/get permissions
+
+		akv, err := azure.GetKeyVault(ctx, c.KeyVault.Subscription, c.KeyVault.ResourceGroup, c.KeyVault.Name)
+		c.TenantID = akv.TenantId
+		if err != nil {
+			return fmt.Errorf("getting keyvault: %w", err)
+		}
+
+		cluster, err := azure.GetManagedCluster(ctx, c.Cluster.Subscription, c.Cluster.ResourceGroup, c.Cluster.Name)
+		clusterId := *cluster.Identity.PrincipalID
+		err = akv.AddAccessPolicy(ctx, clusterId, armkeyvault.Permissions{
+			Secrets: []*armkeyvault.SecretPermissions{to.Ptr(armkeyvault.SecretPermissionsGet)},
+		})
+		if err != nil {
+			return fmt.Errorf("adding keyvault access policy for cluster: %w", err)
+		}
+
+		err = akv.AddUserAccessPolicy(ctx, armkeyvault.Permissions{
+			Secrets: []*armkeyvault.SecretPermissions{
+				to.Ptr(armkeyvault.SecretPermissionsGet),
+				to.Ptr(armkeyvault.SecretPermissionsSet),
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("adding keyvault access policy for user: %w", err)
+		}
+	} else {
+		lgr.Debug("no secret variables found, skipping keyvault")
+	}
+
 	return nil
+
 }
 
 // getResourceGroup goes through steps of prompting user for a resource group. Possessive is the possessive
@@ -294,7 +406,7 @@ func getResourceGroup(ctx context.Context, subscriptionId, possessive string) (s
 	return name, nil
 }
 
-func getCluster(ctx context.Context, subscriptionId, resourceGroup string) (string, error) {
+func GetClusterName(ctx context.Context, subscriptionId, resourceGroup string) (string, error) {
 	lgr := logger.FromContext(ctx)
 	lgr.Debug("starting to get cluster")
 
@@ -460,6 +572,95 @@ func getContainerRegistry(ctx context.Context, subscriptionId, resourceGroup str
 	return name, nil
 }
 
+func getKeyVault(ctx context.Context, subscriptionId, resourceGroup string) (string, error) {
+	lgr := logger.FromContext(ctx)
+	lgr.Debug("starting to get keyvault")
+
+	if subscriptionId == "" {
+		return "", errors.New("subscriptionId is empty")
+	}
+	if resourceGroup == "" {
+		return "", errors.New("resourceGroup is empty")
+	}
+
+	kvs, err := azure.ListKeyVaults(ctx, c.ContainerRegistry.Subscription, c.ContainerRegistry.ResourceGroup)
+	if err != nil {
+		return "", fmt.Errorf("listing kvs: %w", err)
+	}
+
+	def, err := state.Get(ctx, keyVaultKey)
+	if err != nil && !errors.Is(err, state.KeyNotFoundErr) {
+		// failing to get key vault from state is not worth failing
+		lgr.Debug("failed to get key vault from state: " + err.Error())
+		def = ""
+	}
+
+	kvsWithNew := withNew(kvs)
+	selection, err := prompt.Select("Select your KeyVault", kvsWithNew, &prompt.SelectOpt[newish[azure.Akv]]{
+		Field: func(t newish[azure.Akv]) string {
+			if t.IsNew {
+				return "New KeyVault"
+			}
+
+			return t.Data.Name
+		},
+		Default: def,
+	})
+	if err != nil {
+		return "", fmt.Errorf("selecting keyvault: %w", err)
+	}
+
+	if !selection.IsNew {
+		if err := state.Set(ctx, keyVaultKey, selection.Data.Name); err != nil {
+			// failing to set container registry in state is not worth failing
+			lgr.Debug("failed to set keyvault in state: " + err.Error())
+		}
+
+		lgr.Debug("finished getting keyvault")
+		return selection.Data.Name, nil
+	}
+
+	name, err := prompt.Input("Input your new KeyVault name", &prompt.InputOpt{
+		Validate: validateKeyVault,
+	})
+	if err != nil {
+		return "", fmt.Errorf("inputting new keyvault name: %w", err)
+	}
+
+	locations, err := azure.ListLocations(ctx, subscriptionId)
+	if err != nil {
+		return "", fmt.Errorf("listing locations: %w", err)
+	}
+
+	location, err := prompt.Select("Input your new KeyVault location", locations, &prompt.SelectOpt[armsubscriptions.Location]{
+		Field: func(t armsubscriptions.Location) string {
+			return *t.DisplayName
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("selecting new keyvault location: %w", err)
+	}
+
+	t, err := azure.GetTenant(ctx)
+	if err != nil {
+		return "", fmt.Errorf("getting tenant: %w", err)
+	}
+	tenantId := *t.TenantID
+
+	_, err = azure.NewAkv(ctx, tenantId, subscriptionId, resourceGroup, name, *location.Name)
+	if err != nil {
+		return "", fmt.Errorf("creating new container registry: %w", err)
+	}
+	lgr.Info("created KeyVault" + name)
+
+	if err := state.Set(ctx, keyVaultKey, name); err != nil {
+		// failing to set container registry in state is not worth failing
+		lgr.Debug("failed to set keyvault in state: " + err.Error())
+	}
+
+	lgr.Debug("finished getting keyvault")
+	return name, nil
+}
 func withNew[T any](instantiated []T) []newish[T] {
 	ret := make([]newish[T], 0, len(instantiated)+1)
 
@@ -538,6 +739,31 @@ func validateContainerRegistry(cr string) error {
 
 	if !alphanumRegex.MatchString(cr) {
 		return errors.New("must contain only alphanumerics")
+	}
+
+	return nil
+}
+
+func validateKeyVault(kv string) error {
+	if len(kv) < 3 || len(kv) > 24 {
+		return errors.New("must be between 1 and 90 characters long")
+	}
+
+	if !alphanumHyphenRegex.MatchString(kv) {
+		return errors.New("must contain only alphanumerics and hyphens")
+	}
+
+	if !unicode.IsLetter(rune(kv[0])) {
+		return errors.New("must start with a letter")
+	}
+
+	if strings.Contains(kv, "--") {
+		return errors.New("cannot contain consecutive hyphens")
+	}
+
+	lastLetter, _ := utf8.DecodeLastRuneInString(kv)
+	if !unicode.IsLetter(lastLetter) && !unicode.IsNumber(lastLetter) {
+		return errors.New("must end with a letter or number")
 	}
 
 	return nil

@@ -14,8 +14,10 @@ type config struct {
 	// Dockerfile is the path to the Dockerfile
 	Dockerfile string `toml:"dockerfile"`
 	// K8sResources is the path to the Kubernetes resource files
-	K8sResources string `toml:"kubernetes_resources"`
-	Store        Store  `toml:"store,omitempty"`
+	K8sResources string   `toml:"kubernetes_resources"`
+	Store        Store    `toml:"store,omitempty"`
+	KeyVault     KeyVault `toml:"keyvault,omitempty"`
+	TenantID     string   `toml:"tenant_id,omitempty"`
 }
 
 type ResourceId struct {
@@ -29,6 +31,10 @@ type Cluster struct {
 }
 
 type ContainerRegistry struct {
+	ResourceId
+}
+
+type KeyVault struct {
 	ResourceId
 }
 

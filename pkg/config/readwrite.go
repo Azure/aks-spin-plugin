@@ -76,3 +76,7 @@ func Write() error {
 
 	return nil
 }
+
+func GetKeyVault() KeyVault{
+	return c.KeyVault
+}
