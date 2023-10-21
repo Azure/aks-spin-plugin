@@ -658,6 +658,13 @@ func getKeyVault(ctx context.Context, subscriptionId, resourceGroup string) (str
 		lgr.Debug("failed to set keyvault in state: " + err.Error())
 	}
 
+	lgr.Debug("enabling KeyVault CSI driver add-on")
+	err = azure.EnableKeyvaultCSIDriver(ctx, c.Cluster.Subscription, c.Cluster.ResourceGroup, c.Cluster.Name)
+	if err != nil {
+		return "", fmt.Errorf("enabling CSI driver add-on: %w", err)
+	}
+	lgr.Debug("finished enabling KeyVault CSI driver add-on")
+
 	lgr.Debug("finished getting keyvault")
 	return name, nil
 }
