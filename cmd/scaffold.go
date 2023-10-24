@@ -161,7 +161,7 @@ var k8sCmd = &cobra.Command{
 			return usererror.New(errors.New("name not set in spin manifest"), "Name not set in spin manifest. Add a name to your spin manifest and try again.")
 		}
 
-		manifests, err := generate.Manifests(name, "placeholderimagefornow:latest")
+		manifests, err := generate.Manifests(manifest, "placeholderimagefornow:latest")
 		if err != nil {
 			return fmt.Errorf("generating manifests: %w", err)
 		}

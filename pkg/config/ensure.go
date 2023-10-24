@@ -288,8 +288,6 @@ func ensureKeyVault(ctx context.Context, m spin.Manifest) error {
 			c.KeyVault.Name = kv
 		}
 
-		// TODO check keyvault access policy for existing keyvaults to see if we need to add the cluster's identity or user put/get permissions
-
 		akv, err := azure.GetKeyVault(ctx, c.KeyVault.Subscription, c.KeyVault.ResourceGroup, c.KeyVault.Name)
 		c.TenantID = akv.TenantId
 		if err != nil {

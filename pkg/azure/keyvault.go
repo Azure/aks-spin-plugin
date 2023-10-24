@@ -272,7 +272,7 @@ func (a *Akv) AddAccessPolicy(ctx context.Context, objectId string, permissions 
 	return nil
 }
 func (a *Akv) AddUserAccessPolicy(ctx context.Context, permissions armkeyvault.Permissions) error {
-	lgr := logger.FromContext(ctx).With("objectId", "name", a.Name, "resourceGroup", a.ResourceGroup, "subscriptionId", a.SubscriptionId)
+	lgr := logger.FromContext(ctx).With("name", a.Name, "resourceGroup", a.ResourceGroup, "subscriptionId", a.SubscriptionId)
 	ctx = logger.WithContext(ctx, lgr)
 	lgr.Info("starting to add user access policy")
 	defer lgr.Info("finished adding user access policy")
@@ -286,6 +286,7 @@ func (a *Akv) AddUserAccessPolicy(ctx context.Context, permissions armkeyvault.P
 	if err != nil {
 		return fmt.Errorf("getting client object id: %w", err)
 	}
+	lgr = lgr.With("objectId", objectId)
 	client, err := armkeyvault.NewVaultsClient(a.SubscriptionId, cred, nil)
 	if err != nil {
 		return fmt.Errorf("creating client: %w", err)

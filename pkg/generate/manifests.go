@@ -3,6 +3,8 @@ package generate
 import (
 	"bytes"
 	"fmt"
+	"github.com/Azure/go-autorest/autorest/to"
+	"github.com/azure/spin-aks-plugin/pkg/spin"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -23,12 +25,13 @@ var (
 	}
 )
 
-func Manifests(name, image string) ([]byte, error) {
+// TODO: replace image string once Dockerfile is created/scaffolding is tested
+func Manifests(sm spin.Manifest, image string) ([]byte, error) {
 	// define the objects we want to generate
 
 	// using applyconfiguration types to generate yaml
 	// means we only generate yaml with the fields we care about
-	ns := core.Namespace(name).WithAnnotations(annotations)
+	ns := core.Namespace(sm.Name).WithAnnotations(annotations)
 	rc := node.RuntimeClass("wasmtime-spin-v1").
 		WithAnnotations(annotations).
 		WithHandler("spin").
@@ -36,9 +39,9 @@ func Manifests(name, image string) ([]byte, error) {
 			"kubernetes.azure.com/wasmtime-spin-v0-5-1": "true",
 		}))
 	appLabels := map[string]string{
-		"app": name,
+		"app": sm.Name,
 	}
-	dep := apps.Deployment(name, *ns.Name).
+	dep := apps.Deployment(sm.Name, *ns.Name).
 		WithAnnotations(annotations).
 		WithSpec(
 			apps.DeploymentSpec().
@@ -50,14 +53,33 @@ func Manifests(name, image string) ([]byte, error) {
 					WithSpec(core.PodSpec().
 						WithRuntimeClassName(*rc.Name).
 						WithContainers(core.Container().
-							WithName(name).
+							WithName(sm.Name).
 							WithImage(image).
 							WithCommand("/"),
 						),
 					),
 				),
 		)
-	service := core.Service(name, *ns.Name).
+
+	secrets := []*core.EnvVarApplyConfiguration{}
+	for _, v := range sm.Variables {
+		secrets = append(secrets,
+			&core.EnvVarApplyConfiguration{
+				Name: v.Name,
+				ValueFrom: &core.EnvVarSourceApplyConfiguration{
+					SecretKeyRef: &core.SecretKeySelectorApplyConfiguration{
+						LocalObjectReferenceApplyConfiguration: core.LocalObjectReferenceApplyConfiguration{
+							Name: v.Name,
+						},
+						Key: to.StringPtr("secretkeyplaceholderneedtochange"),
+					},
+				},
+			},
+		)
+	}
+	dep.Spec.Template.Spec.Containers[0] = *dep.Spec.Template.Spec.Containers[0].WithEnv(secrets...)
+
+	service := core.Service(sm.Name, *ns.Name).
 		WithAnnotations(annotations).
 		WithSpec(core.ServiceSpec().
 			WithSelector(appLabels).
