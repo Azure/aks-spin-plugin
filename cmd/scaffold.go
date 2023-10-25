@@ -143,7 +143,8 @@ var k8sCmd = &cobra.Command{
 	Short: "Generates Kubernetes manifests",
 	Long:  "Creates Kubernetes manifests required to run your application on AKS",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		lgr := logger.FromContext(cmd.Context())
+		ctx := cmd.Context()
+		lgr := logger.FromContext(ctx)
 		lgr.Info("starting k8s command")
 
 		spinManifest := config.Get().SpinManifest
@@ -161,7 +162,7 @@ var k8sCmd = &cobra.Command{
 			return usererror.New(errors.New("name not set in spin manifest"), "Name not set in spin manifest. Add a name to your spin manifest and try again.")
 		}
 
-		manifests, err := generate.Manifests(manifest, "placeholderimagefornow:latest")
+		manifests, err := generate.Manifests(ctx, manifest, "placeholderimagefornow:latest")
 		if err != nil {
 			return fmt.Errorf("generating manifests: %w", err)
 		}
