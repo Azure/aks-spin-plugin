@@ -247,6 +247,48 @@ func GetCluster(ctx context.Context, subscriptionId, resourceGroup, clusterName 
 	return &res.ManagedCluster, nil
 }
 
+func EnableKeyvaultCSIDriver(ctx context.Context, subscriptionId, resourceGroup, name string) error {
+	lgr := logger.FromContext(ctx)
+	ctx = logger.WithContext(ctx, lgr)
+	lgr.Debug("enabling keyvault CSI driver for cluster")
+
+	mc, err := GetCluster(ctx, subscriptionId, resourceGroup, name)
+	lgr = lgr.With("cluster", mc)
+
+	if mc == nil {
+		return errors.New("managed cluster cannot be nil to install keyvault csi driver")
+	}
+
+	if mc.Properties == nil {
+		mc.Properties = &armcontainerservice.ManagedClusterProperties{}
+	}
+
+	if mc.Properties.AddonProfiles != nil {
+		mc.Properties.AddonProfiles["azureKeyvaultSecretsProvider"] = &armcontainerservice.ManagedClusterAddonProfile{
+			Enabled: to.Ptr(true),
+			Config: map[string]*string{
+				"enableSecretRotation": to.Ptr("true"),
+			},
+		}
+	} else {
+		mc.Properties.AddonProfiles = map[string]*armcontainerservice.ManagedClusterAddonProfile{
+			"azureKeyvaultSecretsProvider": {
+				Enabled: to.Ptr(true),
+				Config: map[string]*string{
+					"enableSecretRotation": to.Ptr("true"),
+				},
+			},
+		}
+	}
+
+	err = putCluster(ctx, subscriptionId, resourceGroup, mc)
+	if err != nil {
+		return fmt.Errorf("putting cluster: %w", err)
+	}
+
+	return nil
+}
+
 func pollWithLog[T any](ctx context.Context, p *runtime.Poller[T], msg string) (T, error) {
 	lgr := logger.FromContext(ctx)
 
