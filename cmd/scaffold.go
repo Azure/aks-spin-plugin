@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/BurntSushi/toml"
 	"github.com/azure/spin-aks-plugin/pkg/config"
 	"github.com/azure/spin-aks-plugin/pkg/generate"
 	"github.com/azure/spin-aks-plugin/pkg/logger"
@@ -101,9 +103,38 @@ var dockerfileCmd = &cobra.Command{
 			})
 		}
 
+		hasVars := len(manifest.Variables) > 0
+		var runtimeConfigDest string
+		if hasVars {
+			lgr.Debug("found variables, writing runtime config")
+
+			// check if runtime config already exists
+			runtimeConfigDest = filepath.Join(filepath.Dir(spinManifest), "spin-config.toml")
+			if _, err := os.Stat(runtimeConfigDest); err == nil && !override {
+				if os.IsNotExist(err) {
+
+				}
+			}
+
+			runtimeConfig := spin.NewRuntimeConfig(manifest)
+			buf := new(bytes.Buffer)
+			tomlEncoder := toml.NewEncoder(buf)
+			if err := tomlEncoder.Encode(runtimeConfig); err != nil {
+				return fmt.Errorf("encoding runtime config: %w", err)
+			}
+			// write runtime config to file
+			runtimeConfigDest = filepath.Join(filepath.Dir(spinManifest), "spin-config.toml")
+			if err := os.WriteFile(runtimeConfigDest, buf.Bytes(), 0644); err != nil {
+				return fmt.Errorf("writing runtime config: %w", err)
+			}
+			lgr.Info("Runtime config written to " + runtimeConfigDest)
+			lgr.Debug("finished writing runtime config")
+		}
+
 		dockerfile, err := generate.Dockerfile(generate.DockerfileOpt{
-			SpinManifest: manifestRelativePath,
-			Sources:      sources,
+			SpinManifest:  manifestRelativePath,
+			Sources:       sources,
+			RuntimeConfig: runtimeConfigDest,
 		})
 		if err != nil {
 			return fmt.Errorf("generating Dockerfile: %w", err)

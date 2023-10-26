@@ -18,6 +18,8 @@ type DockerfileOpt struct {
 	SpinManifest string
 	// Sources is a list of sources and should be a cleaned path relative to the SpinManifest
 	Sources []Source
+	// RuntimeConfig is the path to the runtime config from the Dockerfile directory
+	RuntimeConfig string
 }
 
 type Source struct {

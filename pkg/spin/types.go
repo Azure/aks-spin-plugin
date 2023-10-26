@@ -10,7 +10,7 @@ type Manifest struct {
 	Description         string
 	Authors             []string
 	Trigger             manifestTrigger
-	Variables           variables
+	Variables           map[string]Variable
 	Components          []Component `toml:"component"`
 }
 
@@ -20,7 +20,7 @@ type manifestTrigger struct {
 	Base string
 }
 
-type variables map[string]struct {
+type Variable struct {
 	// def default value of variable
 	Def      string `toml:"default"`
 	Required bool
