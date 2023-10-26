@@ -111,10 +111,9 @@ var dockerfileCmd = &cobra.Command{
 			// check if runtime config already exists
 			runtimeConfigDest = filepath.Join(filepath.Dir(spinManifest), "spin-config.toml")
 			if _, err := os.Stat(runtimeConfigDest); err == nil && !override {
-				return usererror.New(
-					errors.New("file exists"),
-					fmt.Sprintf("File %s already exists. Use --override to overwrite.", runtimeConfigDest),
-				)
+				if os.IsNotExist(err) {
+
+				}
 			}
 
 			runtimeConfig := spin.NewRuntimeConfig(manifest)
