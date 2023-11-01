@@ -86,13 +86,13 @@ func Manifests(ctx context.Context, sm spin.Manifest, image string) ([]byte, err
 				),
 		)
 
-	var secrets []*core.EnvVarApplyConfiguration
+	var envVars []*core.EnvVarApplyConfiguration
 	var secretObjects []*secv1.SecretObject
 	var paramArray []string
 
 	for k, v := range sm.Variables {
 		if v.Secret {
-			secrets = append(secrets,
+			envVars = append(envVars,
 				&core.EnvVarApplyConfiguration{
 					Name: to.StringPtr("SPIN_CONFIG_" + k),
 					ValueFrom: &core.EnvVarSourceApplyConfiguration{
@@ -130,7 +130,13 @@ func Manifests(ctx context.Context, sm spin.Manifest, image string) ([]byte, err
 			}
 
 			paramArray = append(paramArray, string(params))
+			continue
 		}
+		envVars = append(envVars,
+			&core.EnvVarApplyConfiguration{
+				Name:  to.StringPtr("SPIN_CONFIG_" + k),
+				Value: to.StringPtr(v.Def),
+			})
 	}
 
 	conf := config.Get()
@@ -158,13 +164,13 @@ func Manifests(ctx context.Context, sm spin.Manifest, image string) ([]byte, err
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      spcName,
-			Namespace: *ns.Namespace,
+			Namespace: *ns.Name,
 			OwnerReferences: []metav1.OwnerReference{{
 				APIVersion: *dep.APIVersion,
 				Controller: to.BoolPtr(true),
 				Kind:       *dep.Kind,
 				Name:       *dep.Name,
-				UID:        *dep.UID,
+				UID:        "uid",
 			}},
 		},
 		Spec: secv1.SecretProviderClassSpec{
@@ -181,7 +187,7 @@ func Manifests(ctx context.Context, sm spin.Manifest, image string) ([]byte, err
 		},
 	}
 
-	dep.Spec.Template.Spec.Containers[0] = *dep.Spec.Template.Spec.Containers[0].WithEnv(secrets...)
+	dep.Spec.Template.Spec.Containers[0] = *dep.Spec.Template.Spec.Containers[0].WithEnv(envVars...)
 
 	service := core.Service(sm.Name, *ns.Name).
 		WithAnnotations(annotations).
